@@ -1,0 +1,348 @@
+# depslib dependency file v1.0
+1379498611 source:c:\users\alanzhuang\desktop\xml2json\xml2json.cpp
+	<iostream>
+	<vector>
+	<map>
+	<string>
+	<sstream>
+	<fstream>
+	<sys/time.h>
+	<time.h>
+	"xml2json.hpp"
+
+1242150378 c:\users\alanzhuang\desktop\xml2json\rapidxml\rapidxml.hpp
+	<cstdlib>
+	<cassert>
+	<new>
+	<exception>
+
+1242398962 c:\users\alanzhuang\desktop\xml2json\rapidxml\rapidxml_utils.hpp
+	"rapidxml.hpp"
+	<vector>
+	<string>
+	<fstream>
+	<stdexcept>
+
+1242398960 c:\users\alanzhuang\desktop\xml2json\rapidxml\rapidxml_print.hpp
+	"rapidxml.hpp"
+	<ostream>
+	<iterator>
+
+1378952583 c:\users\alanzhuang\desktop\xml2json\rapidjson\document.h
+	"reader.h"
+	"internal/strfunc.h"
+	<new>
+
+1378952583 c:\users\alanzhuang\desktop\xml2json\rapidjson\reader.h
+	"rapidjson.h"
+	"encodings.h"
+	"internal/pow10.h"
+	"internal/stack.h"
+	<csetjmp>
+	<nmmintrin.h>
+	<emmintrin.h>
+
+1378952583 c:\users\alanzhuang\desktop\xml2json\rapidjson\rapidjson.h
+	<cstdlib>
+	<cstring>
+	<inttypes.h>
+	<cassert>
+	"allocators.h"
+	"encodings.h"
+
+1378952583 c:\users\alanzhuang\desktop\xml2json\rapidjson\allocators.h
+	"rapidjson.h"
+
+1378952583 c:\users\alanzhuang\desktop\xml2json\rapidjson\encodings.h
+	"rapidjson.h"
+
+1378952583 c:\users\alanzhuang\desktop\xml2json\rapidjson\internal\pow10.h
+
+1378952583 c:\users\alanzhuang\desktop\xml2json\rapidjson\internal\stack.h
+
+1378952583 c:\users\alanzhuang\desktop\xml2json\rapidjson\internal\strfunc.h
+
+1378952583 c:\users\alanzhuang\desktop\xml2json\rapidjson\writer.h
+	"rapidjson.h"
+	"internal/stack.h"
+	"internal/strfunc.h"
+	<cstdio>
+	<new>
+
+1378952583 c:\users\alanzhuang\desktop\xml2json\rapidjson\stringbuffer.h
+	"rapidjson.h"
+	"internal/stack.h"
+
+1379501617 c:\users\alanzhuang\desktop\xml2json\xml2json.hpp
+	<map>
+	<string>
+	"rapidxml/rapidxml.hpp"
+	"rapidxml/rapidxml_utils.hpp"
+	"rapidxml/rapidxml_print.hpp"
+	"rapidjson/document.h"
+	"rapidjson/writer.h"
+	"rapidjson/stringbuffer.h"
+
+1385103481 source:c:\documents and settings\administrator\桌面\xml2json\xml2json.cpp
+	<iostream>
+	<vector>
+	<map>
+	<string>
+	<sstream>
+	<fstream>
+	<sys/time.h>
+	<time.h>
+	"xml2json.hpp"
+
+1385154427 c:\documents and settings\administrator\桌面\xml2json\xml2json.hpp
+	<map>
+	<string>
+	"rapidxml/rapidxml.hpp"
+	"rapidxml/rapidxml_utils.hpp"
+	"rapidxml/rapidxml_print.hpp"
+	"rapidjson/document.h"
+	"rapidjson/writer.h"
+	"rapidjson/stringbuffer.h"
+
+1242150378 c:\documents and settings\administrator\桌面\xml2json\rapidxml\rapidxml.hpp
+	<cstdlib>
+	<cassert>
+	<new>
+	<exception>
+
+1242398962 c:\documents and settings\administrator\桌面\xml2json\rapidxml\rapidxml_utils.hpp
+	"rapidxml.hpp"
+	<vector>
+	<string>
+	<fstream>
+	<stdexcept>
+
+1242398960 c:\documents and settings\administrator\桌面\xml2json\rapidxml\rapidxml_print.hpp
+	"rapidxml.hpp"
+	<ostream>
+	<iterator>
+
+1378952583 c:\documents and settings\administrator\桌面\xml2json\rapidjson\document.h
+	"reader.h"
+	"internal/strfunc.h"
+	<new>
+
+1378952583 c:\documents and settings\administrator\桌面\xml2json\rapidjson\reader.h
+	"rapidjson.h"
+	"encodings.h"
+	"internal/pow10.h"
+	"internal/stack.h"
+	<csetjmp>
+	<nmmintrin.h>
+	<emmintrin.h>
+
+1378952583 c:\documents and settings\administrator\桌面\xml2json\rapidjson\rapidjson.h
+	<cstdlib>
+	<cstring>
+	<inttypes.h>
+	<cassert>
+	"allocators.h"
+	"encodings.h"
+
+1378952583 c:\documents and settings\administrator\桌面\xml2json\rapidjson\allocators.h
+	"rapidjson.h"
+
+1378952583 c:\documents and settings\administrator\桌面\xml2json\rapidjson\encodings.h
+	"rapidjson.h"
+
+1378952583 c:\documents and settings\administrator\桌面\xml2json\rapidjson\internal\pow10.h
+
+1378952583 c:\documents and settings\administrator\桌面\xml2json\rapidjson\internal\stack.h
+
+1378952583 c:\documents and settings\administrator\桌面\xml2json\rapidjson\internal\strfunc.h
+
+1378952583 c:\documents and settings\administrator\桌面\xml2json\rapidjson\writer.h
+	"rapidjson.h"
+	"internal/stack.h"
+	"internal/strfunc.h"
+	<cstdio>
+	<new>
+
+1378952583 c:\documents and settings\administrator\桌面\xml2json\rapidjson\stringbuffer.h
+	"rapidjson.h"
+	"internal/stack.h"
+
+1385103481 source:c:\documents and settings\administrator\桌面\复件 xml2json\xml2json.cpp
+	<iostream>
+	<vector>
+	<map>
+	<string>
+	<sstream>
+	<fstream>
+	<sys/time.h>
+	<time.h>
+	"xml2json.hpp"
+
+1385307034 c:\documents and settings\administrator\桌面\复件 xml2json\xml2json.hpp
+	<map>
+	<string>
+	"rapidxml/rapidxml.hpp"
+	"rapidxml/rapidxml_utils.hpp"
+	"rapidxml/rapidxml_print.hpp"
+	"rapidjson/document.h"
+	"rapidjson/writer.h"
+	"rapidjson/stringbuffer.h"
+
+1242150378 c:\documents and settings\administrator\桌面\复件 xml2json\rapidxml\rapidxml.hpp
+	<cstdlib>
+	<cassert>
+	<new>
+	<exception>
+
+1242398962 c:\documents and settings\administrator\桌面\复件 xml2json\rapidxml\rapidxml_utils.hpp
+	"rapidxml.hpp"
+	<vector>
+	<string>
+	<fstream>
+	<stdexcept>
+
+1242398960 c:\documents and settings\administrator\桌面\复件 xml2json\rapidxml\rapidxml_print.hpp
+	"rapidxml.hpp"
+	<ostream>
+	<iterator>
+
+1378952583 c:\documents and settings\administrator\桌面\复件 xml2json\rapidjson\document.h
+	"reader.h"
+	"internal/strfunc.h"
+	<new>
+
+1378952583 c:\documents and settings\administrator\桌面\复件 xml2json\rapidjson\reader.h
+	"rapidjson.h"
+	"encodings.h"
+	"internal/pow10.h"
+	"internal/stack.h"
+	<csetjmp>
+	<nmmintrin.h>
+	<emmintrin.h>
+
+1378952583 c:\documents and settings\administrator\桌面\复件 xml2json\rapidjson\rapidjson.h
+	<cstdlib>
+	<cstring>
+	<inttypes.h>
+	<cassert>
+	"allocators.h"
+	"encodings.h"
+
+1378952583 c:\documents and settings\administrator\桌面\复件 xml2json\rapidjson\allocators.h
+	"rapidjson.h"
+
+1378952583 c:\documents and settings\administrator\桌面\复件 xml2json\rapidjson\encodings.h
+	"rapidjson.h"
+
+1378952583 c:\documents and settings\administrator\桌面\复件 xml2json\rapidjson\internal\pow10.h
+
+1378952583 c:\documents and settings\administrator\桌面\复件 xml2json\rapidjson\internal\stack.h
+
+1378952583 c:\documents and settings\administrator\桌面\复件 xml2json\rapidjson\internal\strfunc.h
+
+1378952583 c:\documents and settings\administrator\桌面\复件 xml2json\rapidjson\writer.h
+	"rapidjson.h"
+	"internal/stack.h"
+	"internal/strfunc.h"
+	<cstdio>
+	<new>
+
+1378952583 c:\documents and settings\administrator\桌面\复件 xml2json\rapidjson\stringbuffer.h
+	"rapidjson.h"
+	"internal/stack.h"
+
+1385356324 source:c:\users\alanzhuang\desktop\复件 xml2json\xml2json.cpp
+	<iostream>
+	<vector>
+	<map>
+	<string>
+	<sstream>
+	<fstream>
+	<sys/time.h>
+	<time.h>
+	"xml2json.hpp"
+
+1385355806 c:\users\alanzhuang\desktop\复件 xml2json\xml2json.hpp
+	<map>
+	<string>
+	"rapidxml/rapidxml.hpp"
+	"rapidxml/rapidxml_utils.hpp"
+	"rapidxml/rapidxml_print.hpp"
+	"rapidjson/document.h"
+	"rapidjson/writer.h"
+	"rapidjson/stringbuffer.h"
+
+1242150378 c:\users\alanzhuang\desktop\复件 xml2json\rapidxml\rapidxml.hpp
+	<cstdlib>
+	<cassert>
+	<new>
+	<exception>
+
+1242398962 c:\users\alanzhuang\desktop\复件 xml2json\rapidxml\rapidxml_utils.hpp
+	"rapidxml.hpp"
+	<vector>
+	<string>
+	<fstream>
+	<stdexcept>
+
+1242398960 c:\users\alanzhuang\desktop\复件 xml2json\rapidxml\rapidxml_print.hpp
+	"rapidxml.hpp"
+	<ostream>
+	<iterator>
+
+1378952584 c:\users\alanzhuang\desktop\复件 xml2json\rapidjson\document.h
+	"reader.h"
+	"internal/strfunc.h"
+	<new>
+
+1378952584 c:\users\alanzhuang\desktop\复件 xml2json\rapidjson\reader.h
+	"rapidjson.h"
+	"encodings.h"
+	"internal/pow10.h"
+	"internal/stack.h"
+	<csetjmp>
+	<nmmintrin.h>
+	<emmintrin.h>
+
+1378952584 c:\users\alanzhuang\desktop\复件 xml2json\rapidjson\rapidjson.h
+	<cstdlib>
+	<cstring>
+	<inttypes.h>
+	<cassert>
+	"allocators.h"
+	"encodings.h"
+
+1378952584 c:\users\alanzhuang\desktop\复件 xml2json\rapidjson\allocators.h
+	"rapidjson.h"
+
+1378952584 c:\users\alanzhuang\desktop\复件 xml2json\rapidjson\encodings.h
+	"rapidjson.h"
+
+1378952584 c:\users\alanzhuang\desktop\复件 xml2json\rapidjson\internal\pow10.h
+
+1378952584 c:\users\alanzhuang\desktop\复件 xml2json\rapidjson\internal\stack.h
+
+1378952584 c:\users\alanzhuang\desktop\复件 xml2json\rapidjson\internal\strfunc.h
+
+1378952584 c:\users\alanzhuang\desktop\复件 xml2json\rapidjson\writer.h
+	"rapidjson.h"
+	"internal/stack.h"
+	"internal/strfunc.h"
+	<cstdio>
+	<new>
+
+1378952584 c:\users\alanzhuang\desktop\复件 xml2json\rapidjson\stringbuffer.h
+	"rapidjson.h"
+	"internal/stack.h"
+
+1385378514 source:c:\users\alanzhuang\desktop\xml2json.git\test\xml2json.cpp
+	<iostream>
+	<vector>
+	<map>
+	<string>
+	<sstream>
+	<fstream>
+	<sys/time.h>
+	<time.h>
+	"xml2json.hpp"
+

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<tl attr="added attr"> 
+  <null_node_without_attr/>
+  <id tid="added tid">1234567890a</id>  
+  <ts>
+  	text1 makes it complex
+  	text2 makes it more complex array
+  	<text_array>text</text_array>
+  	<text_array>text</text_array>
+  	text3
+    <lang language="Chinese">1</lang>
+    <![CDATA[if a<b then the cdata is good.]]>
+    <null_node_again_inside/>
+    <t>
+      text to make it more complex
+      <st>26.026</st>  
+      <du>3.993</du>  
+      <ct>派拉蒙影片公司摄制&amp;test</ct> 
+    </t>  
+    <t> 
+      <st>48.048</st>  
+      <du>3.993</du>  
+      <ct>主演：詹姆斯.史都华</ct> 
+    </t>  
+    <t> 
+      <st>60.060</st>  
+      <du>3.993</du>  
+      <ct>主演：金.诺娃</ct> 
+    </t>  
+ </ts>
+</tl>
+<null_node_again_and_again/>
+<zzz attr="null_with_attr"/>
+<e>just text</e>
