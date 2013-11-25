@@ -12,19 +12,130 @@ simple and fast, and almost fully support for XML standards
 it follows these simple but carefully considered rules below: 
 
 
-	Pattern	XML							JSON			Access
-	
-1       <e/>                                    "e": null					o.e
+<table>
+<tbody><tr>
+<td bgcolor="#CCCCCC"><strong>Pattern</strong>
+</td>
+<td bgcolor="#f0f0f0"><strong>XML</strong>
+</td>
+<td bgcolor="#CCCCCC"><strong>JSON</strong>
+</td>
+<td bgcolor="#f0f0f0"><strong>Access</strong>
+</td>
+</tr>
 
-2       <e>text</e>				"e": "text"					o.e
+<tr>
+<td bgcolor="#CCCCCC">1</td>
+<td bgcolor="#f0f0f0">
+<code>&lt;e/&gt;</code>
+</td>
+<td bgcolor="#CCCCCC">
+<code>"e": null</code>
+</td>
+<td bgcolor="#f0f0f0">
+<code>o.e</code>
+</td>
+</tr>
 
-3       <e name="value" />			"e": {"@name": "value"}				o.e["@name"]
+<tr>
+<td bgcolor="#CCCCCC">2</td>
+<td bgcolor="#f0f0f0">
+<code>&lt;e&gt;text&lt;/e&gt;</code>
+</td>
+<td bgcolor="#CCCCCC">
+<code>"e": "text"</code>
+</td>
+<td bgcolor="#f0f0f0">
+<code>o.e</code>
+</td>
+</tr>
 
-4	<e name="value">text</e>		"e": { "@name": "value", "#text": "text" }	o.e["@name"] o.e["#text"]
+<tr>
+<td bgcolor="#CCCCCC">3</td>
+<td bgcolor="#f0f0f0">
+<code>&lt;e name="value" /&gt;</code>
+</td>
+<td bgcolor="#CCCCCC">
+<code>"e":{"@name": "value"}</code>
+</td>
+<td bgcolor="#f0f0f0">
+<code>o.e["@name"]</code>
+</td>
+</tr>
 
-5	<e> <a>text</a> <b>text</b> </e>	"e": { "a": "text", "b": "text" }		o.e.a o.e.b
+<tr>
+<td bgcolor="#CCCCCC">4</td>
+<td bgcolor="#f0f0f0">
+<code>&lt;e name="value"&gt;text&lt;/e&gt;</code>
+</td>
+<td bgcolor="#CCCCCC">
+<code>"e": {
+  "@name": "value",
+  "#text": "text"
+}</code>
+</td>
+<td bgcolor="#f0f0f0">
+<code>o.e["@name"]
+o.e["#text"]</code>
+</td>
+</tr>
 
-6	<e> <a>text</a> <a>text</a> </e>	"e": { "a": ["text", "text"] }			o.e.a[0] o.e.a[1]
+<tr>
+<td bgcolor="#CCCCCC">5</td>
+<td bgcolor="#f0f0f0">
+<code>&lt;e&gt;
+  &lt;a&gt;text&lt;/a&gt;
+  &lt;b&gt;text&lt;/b&gt;
+&lt;/e&gt;</code>
+</td>
+<td bgcolor="#CCCCCC">
+<code>"e": { 
+  "a": "text",
+  "b": "text"
+}</code>
+</td>
+<td bgcolor="#f0f0f0">
+<code>o.e.a
+o.e.b</code>
+</td>
+</tr>
 
-7	<e> text <a>text</a> </e>		"e": { "#text": "text", "a": "text" }		o.e["#text"] o.e.a
+<tr>
+<td bgcolor="#CCCCCC">6</td>
+<td bgcolor="#f0f0f0">
+<code>&lt;e&gt;
+  &lt;a&gt;text&lt;/a&gt;
+  &lt;a&gt;text&lt;/a&gt;
+&lt;/e&gt;</code>
+</td>
+<td bgcolor="#CCCCCC">
+<code>"e": {
+  "a": ["text", "text"]
+}</code>
+</td>
+<td bgcolor="#f0f0f0">
+<code>o.e.a[0]
+o.e.a[1]</code>
+</td>
+</tr>
 
+<tr>
+<td bgcolor="#CCCCCC">7</td>
+<td bgcolor="#f0f0f0">
+<code>&lt;e&gt;
+  text
+  &lt;a&gt;text&lt;/a&gt;
+&lt;/e&gt;</code>
+</td>
+<td bgcolor="#CCCCCC">
+<code>"e": {
+  "#text": "text",
+  "a": "text"
+}</code>
+</td>
+<td bgcolor="#f0f0f0">
+<code>o.e["#text"]
+o.e.a</code>
+</td>
+</tr>
+</tbody></table>
