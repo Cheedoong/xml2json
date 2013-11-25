@@ -14,11 +14,11 @@ it follows these simple but carefully considered rules below:
 
 	Pattern	XML							JSON			Access
 	
-1	<e/>					"e": null					o.e
+1       <e/>                                    "e": null					o.e
 
-2	<e>text</e>				"e": "text"					o.e
+2       <e>text</e>				"e": "text"					o.e
 
-3	<e name="value" />			"e": {"@name": "value"}				o.e["@name"]
+3       <e name="value" />			"e": {"@name": "value"}				o.e["@name"]
 
 4	<e name="value">text</e>		"e": { "@name": "value", "#text": "text" }	o.e["@name"] o.e["#text"]
 
