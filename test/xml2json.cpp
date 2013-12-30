@@ -37,7 +37,8 @@ int main(int argc, const char *argv[])
 
 	ofstream outf;
 	outf.open("test_track_1.js.txt");
-	outf << json_str;
+	char BOM[4]={(char)0xEF, (char)0xBB, (char)0xBF, '\0'};
+	outf << BOM << json_str;
 	outf.close();
 	return 0;
 }

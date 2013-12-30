@@ -1,7 +1,7 @@
 #ifndef XML2JSON_HPP_INCLUDED
 #define XML2JSON_HPP_INCLUDED
 
-// Copyright (C) 2013 Alan Zhuang (Cheedoong)	Tencent, Inc. 
+// Copyright (C) 2013 Alan Zhuang (Cheedoong)	Tencent, Inc.
 
 #include <map>
 #include <string>
@@ -157,3 +157,5 @@ string xml2json(char *xml_str)
 	document.Accept(writer);
 	return buffer.GetString();
 }
+
+#endif
