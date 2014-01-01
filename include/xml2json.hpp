@@ -12,12 +12,14 @@
 
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
+#include "rapidjson/prettywriter.h"
+#include "rapidjson/encodedstream.h"
 #include "rapidjson/stringbuffer.h"
 
-using namespace std;
-using namespace rapidxml;
+//using namespace std;
+//using namespace rapidxml;
 
-void to_array_form_node(xml_node<> *xmlnode_chd, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
+void to_array_form_node(rapidxml::xml_node<> *xmlnode_chd, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
 {
 	rapidjson::Value jsvalue_target; // target to do some operation
 
@@ -57,34 +59,34 @@ void to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value
 	}
 }
 
-void add_attributes(xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
+void add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
 {
 	rapidjson::Value jsvalue_attr;
 
-	xml_attribute<> *myattr;
+	rapidxml::xml_attribute<> *myattr;
 	for (myattr = xmlnode->first_attribute(); myattr; myattr = myattr->next_attribute()) {
 		rapidjson::Value jv;
-		jv.SetString((string("@") + myattr->name()).c_str(), allocator);
+		jv.SetString((std::string("@") + myattr->name()).c_str(), allocator);
 		jsvalue.AddMember(jv.GetString(), myattr->value(), allocator);
 	}
 }
 
-void traverse_node(xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
+void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
 {
 	//cout << "this: " << xmlnode->type() << " name: " << xmlnode->name() << " value: " << xmlnode->value() << endl;
 	rapidjson::Value jsvalue_chd;
 
 	jsvalue.SetObject();
 	jsvalue_chd.SetObject();
-	xml_node<> *xmlnode_chd;
+	rapidxml::xml_node<> *xmlnode_chd;
 
 	// classified discussion:
-	if ((xmlnode->type() == node_data || xmlnode->type() == node_cdata) && xmlnode->value()) {
+	if ((xmlnode->type() == rapidxml::node_data || xmlnode->type() == rapidxml::node_cdata) && xmlnode->value()) {
 		// case: pure_text
 		jsvalue.SetString(xmlnode->value(), allocator); // then addmember("#text" , jsvalue, allocator)
-	} else if (xmlnode->type() == node_element) {
+	} else if (xmlnode->type() == rapidxml::node_element) {
 		if (xmlnode->first_attribute()) {
-			if (xmlnode->first_node() && xmlnode->first_node()->type() == node_data && count_children(xmlnode) == 1) {
+			if (xmlnode->first_node() && xmlnode->first_node()->type() == rapidxml::node_data && count_children(xmlnode) == 1) {
 				// case: <e attr="xxx">text</e>
 				jsvalue.AddMember("#text", xmlnode->first_node()->value(), allocator);
 				add_attributes(xmlnode, jsvalue, allocator);
@@ -97,7 +99,7 @@ void traverse_node(xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Do
 				 // case: <e />
 				 jsvalue.SetNull();
 				 return;
-			 } else if (xmlnode->first_node()->type() == node_data && count_children(xmlnode) == 1) {
+			 } else if (xmlnode->first_node()->type() == rapidxml::node_data && count_children(xmlnode) == 1) {
 				 // case: <e>text</e>
 				 jsvalue.SetString(xmlnode->first_node()->value());
 				 return;
@@ -105,17 +107,17 @@ void traverse_node(xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Do
 		}
 		if (xmlnode->first_node()) {
 			// case: complex else...
-			map<string, int> name_count;
+			std::map<std::string, int> name_count;
 			for (xmlnode_chd = xmlnode->first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling()) {
-				string current_name;
+				std::string current_name;
 				const char *name_ptr;
-				if (xmlnode_chd->type() == node_data || xmlnode_chd->type() == node_cdata) {
+				if (xmlnode_chd->type() == rapidxml::node_data || xmlnode_chd->type() == rapidxml::node_cdata) {
 					current_name = "#text";
 					name_count[current_name]++;
 					rapidjson::Value jv;
 					jv.SetString("#text", allocator);
 					name_ptr = jv.GetString();
-				} else if (xmlnode_chd->type() == node_element) {
+				} else if (xmlnode_chd->type() == rapidxml::node_element) {
 					current_name = xmlnode_chd->name();
 					name_count[current_name]++;
 					name_ptr = xmlnode_chd->name();
@@ -128,22 +130,22 @@ void traverse_node(xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Do
 			}
 		}
 	} else {
-		cerr << "err data!!" << endl;
+		std::cerr << "err data!!" << std::endl;
 	}
 }
 
 
-string xml2json(char *xml_str)
+std::string xml2json(const char *xml_str)
 {
 	//file<> fdoc("track_orig.xml");
-	xml_document<> doc;
-	doc.parse<0>(xml_str);
+	rapidxml::xml_document<> doc;
+	doc.parse<0>(const_cast<char *>(xml_str));
 
 	rapidjson::Document document;
 	document.SetObject();
 	rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
 
-	xml_node<> *xmlnode_chd;
+	rapidxml::xml_node<> *xmlnode_chd;
 
 	for (xmlnode_chd = doc.first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling()) {
 		//cout << xmlnode_chd->name() << endl;
