@@ -1,6 +1,6 @@
 CC=gcc
 CXX=g++
-INCLUDE += ../include/
+INCLUDE += -I../include/
 LIB += 
 CFLAGS+= -msse2 -DRAPIDJSON_SSE2 -Wall -O3
 TARGET=xml2json
