@@ -3,6 +3,17 @@ xml2json
 
 a C++ header-only library to convert XML document to JSON format
 
+**Build**
+```bash
+make
+```
+
+**Run**
+```bash
+./xml2json input.xml
+```
+
+**Description**
 
 the first carefully written C++ library that converts XML to JSON, already used in the soft subtitle cross-domain solution at the server-end of Tencent Video (http://v.qq.com) and its CDNs
 
