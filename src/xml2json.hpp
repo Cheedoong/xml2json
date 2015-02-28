@@ -3,6 +3,7 @@
 
 // Copyright (C) 2013 Alan Zhuang (Cheedoong)	Tencent, Inc.
 
+#include <iostream>
 #include <map>
 #include <string>
 

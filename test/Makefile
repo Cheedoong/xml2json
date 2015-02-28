@@ -1,12 +1,12 @@
 CC=gcc
 CXX=g++
-INCLUDE += -I../include/
-LIB += 
+INCLUDE += -I../src/
+LIB +=
 CFLAGS+= -msse2 -DRAPIDJSON_SSE2 -Wall -O3
-TARGET=xml2json
+TARGET=test
 ALL:$(TARGET)
 
-C_SRCFILES := $(wildcard *.c) 
+C_SRCFILES := $(wildcard *.c)
 CPP_SRCFILES := $(wildcard *.cpp)
 
 C_OBJS := $(patsubst %.c,%.o, $(C_SRCFILES))
@@ -18,10 +18,10 @@ $(TARGET):$(OBJS)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LIB)
 
 %.o: %.cpp
-	$(CXX) $(CFLAGS) $(INCLUDE) -c -o $@ $< 
-	
+	$(CXX) $(CFLAGS) $(INCLUDE) -c -o $@ $<
+
 %.o: %.c
-	$(CC) $(CFLAGS) $(INCLUDE) -c -o $@ $< 
+	$(CC) $(CFLAGS) $(INCLUDE) -c -o $@ $<
 
 clean:
 	rm -f *.o
