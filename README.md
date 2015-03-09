@@ -7,20 +7,20 @@ xml2json
 
 xml2json is a header-only C++ library. Just copy the `./include` folder to system or project's include path. An examples is shown in main.cpp
 
-*Build and Run a Command Line Tool*
+* Build and Run a Command Line Tool *
 ```bash
 make
 ./xml2json input.xml
 ```
 
-*Description*
+* Description *
 
-the first carefully written C++ library that converts XML to JSON, already used in the soft subtitle cross-domain solution at the server-end of Tencent Video (http://v.qq.com) and its CDNs
+xml2json is the first carefully written C++ library that converts XML to JSON. It's already been used in the soft subtitle cross-domain solution at the server-end of Tencent Video (http://v.qq.com) and its CDNs. 
 
-simple and fast, and with almost full support for the XML standards
+It's simple and fast, and with almost full support for the XML standards. 
 
 
-it follows these simple but carefully considered rules below: 
+It follows these simple but carefully considered rules below: 
 
 
 <table>
