@@ -1,24 +1,25 @@
 CXX = g++
 
-OPTIONS  = -O3 -std=c++1y
+INCLUDE += -I./include/
+OPTIONS  = -std=c++11 -O3
 WARNINGS = -Wall -Wextra -Werror
 
-MAIN 	= src/main.o
-OBJECTS = src/xml2json.gch
+MAIN 	= xml2json.o
+OBJECTS = xml2json.gch
 EXEC 	= xml2json
 
 #############################################################
 
 all : ${EXEC}
 
-src/xml2json.gch : src/xml2json.hpp
-	${CXX} ${OPTIONS} -c $< -o $@
+xml2json.gch : include/xml2json.hpp
+	${CXX} ${OPTIONS}  -c $< -o $@
 
-${MAIN} : src/main.cpp
-	${CXX} ${OPTIONS} -c $< -o $@
+${MAIN} : xml2json.cpp
+	${CXX} ${OPTIONS} $(INCLUDE) -c $< -o $@
 
 ${EXEC} : ${MAIN} ${OBJECTS}
 	${CXX} ${OPTIONS} ${MAIN} -o ${EXEC}
 
 clean :
-	rm src/*.gch src/*.o ${EXEC}
+	rm *.gch *.o ${EXEC}

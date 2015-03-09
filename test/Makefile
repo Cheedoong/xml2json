@@ -1,8 +1,8 @@
 CC=gcc
 CXX=g++
-INCLUDE += -I../src/
+INCLUDE += -I../include/
 LIB +=
-CFLAGS+= -msse2 -DRAPIDJSON_SSE2 -Wall -O3
+CFLAGS+= -Wall -O3
 TARGET=test
 ALL:$(TARGET)
 
