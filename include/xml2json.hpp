@@ -25,6 +25,7 @@
 //using namespace std;
 //using namespace rapidxml;
 
+/*
 void to_array_form_node(rapidxml::xml_node<> *xmlnode_chd, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
 {
     // This function is obsolete. Just remain it here waiting for the future APIs of rapidjson that can minimize the data copy (if with existence guarantees).
@@ -48,6 +49,7 @@ void to_array_form_node(rapidxml::xml_node<> *xmlnode_chd, rapidjson::Value &jsv
         jsvalue.AddMember(rapidjson::StringRef(xmlnode_chd->name()), jsvalue_array, allocator);
     }
 }
+*/
 
 void to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
 {
@@ -142,7 +144,7 @@ void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rap
             for (xmlnode_chd = xmlnode->first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
             {
                 std::string current_name;
-                const char *name_ptr;
+                const char *name_ptr = NULL;
                 rapidjson::Value jn, jv;
                 if (xmlnode_chd->type() == rapidxml::node_data || xmlnode_chd->type() == rapidxml::node_cdata)
                 {
@@ -158,7 +160,7 @@ void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rap
                     name_ptr = xmlnode_chd->name();
                 }
                 traverse_node(xmlnode_chd, jsvalue_chd, allocator);
-                if (name_count[current_name] > 1)
+                if (name_count[current_name] > 1 && name_ptr)
                     to_array_form(name_ptr, jsvalue, jsvalue_chd, allocator);
                 else
                 {
