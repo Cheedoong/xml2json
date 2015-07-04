@@ -1213,6 +1213,31 @@ public:
         return pos;
     }
 
+    //! Erase a member in object by its name.
+    /*! \param name Name of member to be removed.
+        \return Whether the member existed.
+        \note Linear time complexity.
+    */
+    bool EraseMember(const Ch* name) {
+        GenericValue n(StringRef(name));
+        return EraseMember(n);
+    }
+
+#if RAPIDJSON_HAS_STDSTRING
+    bool EraseMember(const std::basic_string<Ch>& name) { return EraseMember(GenericValue(StringRef(name))); }
+#endif
+
+    template <typename SourceAllocator>
+    bool EraseMember(const GenericValue<Encoding, SourceAllocator>& name) {
+        MemberIterator m = FindMember(name);
+        if (m != MemberEnd()) {
+            EraseMember(m);
+            return true;
+        }
+        else
+            return false;
+    }
+
     //@}
 
     //!@name Array
@@ -1724,7 +1749,22 @@ public:
     typedef Allocator AllocatorType;                        //!< Allocator type from template parameter.
 
     //! Constructor
-    /*! \param allocator        Optional allocator for allocating memory.
+    /*! Creates an empty document of specified type.
+        \param type             Mandatory type of object to create.
+        \param allocator        Optional allocator for allocating memory.
+        \param stackCapacity    Optional initial capacity of stack in bytes.
+        \param stackAllocator   Optional allocator for allocating memory for stack.
+    */
+    explicit GenericDocument(Type type, Allocator* allocator = 0, size_t stackCapacity = kDefaultStackCapacity, StackAllocator* stackAllocator = 0) :
+        GenericValue<Encoding, Allocator>(type),  allocator_(allocator), ownAllocator_(0), stack_(stackAllocator, stackCapacity), parseResult_()
+    {
+        if (!allocator_)
+            ownAllocator_ = allocator_ = RAPIDJSON_NEW(Allocator());
+    }
+
+    //! Constructor
+    /*! Creates an empty document which type is Null. 
+        \param allocator        Optional allocator for allocating memory.
         \param stackCapacity    Optional initial capacity of stack in bytes.
         \param stackAllocator   Optional allocator for allocating memory for stack.
     */
