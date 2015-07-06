@@ -2,7 +2,7 @@ CC=gcc
 CXX=g++
 INCLUDE += -I../include/
 LIB +=
-CFLAGS+= -Wall -O3
+CFLAGS+= -Wall -O3 -fdata-sections -ffunction-sections -Wl,--gc-sections -Wl,--strip-all
 TARGET=test
 ALL:$(TARGET)
 
