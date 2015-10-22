@@ -22,34 +22,7 @@
 #include "rapidjson/filewritestream.h"
 #include "rapidjson/error/en.h"
 
-//using namespace std;
-//using namespace rapidxml;
-
-/*
-void to_array_form_node(rapidxml::xml_node<> *xmlnode_chd, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
-{
-    // This function is obsolete. Just remain it here waiting for the future APIs of rapidjson that can minimize the data copy (if with existence guarantees).
-    rapidjson::Value jsvalue_target;
-
-    jsvalue_target = jsvalue.FindMember(xmlnode_chd->name())->value;
-    if (jsvalue_target.IsArray())
-    {
-        jsvalue_target.PushBack(jsvalue_chd, allocator);
-        jsvalue.RemoveMember(xmlnode_chd->name());
-        jsvalue.AddMember(rapidjson::StringRef(xmlnode_chd->name()), jsvalue_target, allocator);
-    }
-    else
-    {
-        rapidjson::Value jsvalue_array;
-        //jsvalue_array = jsvalue_target;
-        jsvalue_array.SetArray();
-        jsvalue_array.PushBack(jsvalue_target, allocator);
-        jsvalue_array.PushBack(jsvalue_chd, allocator);
-        jsvalue.RemoveMember(xmlnode_chd->name());
-        jsvalue.AddMember(rapidjson::StringRef(xmlnode_chd->name()), jsvalue_array, allocator);
-    }
-}
-*/
+// Avoided any namespace pollution.
 
 void to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
 {
@@ -57,7 +30,7 @@ void to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value
     rapidjson::Value jn;             // this is a must, partially because of the latest version of rapidjson
     jn.SetString(name, allocator);
     jsvalue_target = jsvalue.FindMember(name)->value;
-    if (jsvalue_target.IsArray())
+    if(jsvalue_target.IsArray())
     {
         jsvalue_target.PushBack(jsvalue_chd, allocator);
         jsvalue.RemoveMember(name);
@@ -78,7 +51,7 @@ void to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value
 void add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
 {
     rapidxml::xml_attribute<> *myattr;
-    for (myattr = xmlnode->first_attribute(); myattr; myattr = myattr->next_attribute())
+    for(myattr = xmlnode->first_attribute(); myattr; myattr = myattr->next_attribute())
     {
         rapidjson::Value jn, jv;
         jn.SetString((std::string("@") + myattr->name()).c_str(), allocator);
@@ -97,16 +70,16 @@ void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rap
     rapidxml::xml_node<> *xmlnode_chd;
 
     // classified discussion:
-    if ((xmlnode->type() == rapidxml::node_data || xmlnode->type() == rapidxml::node_cdata) && xmlnode->value())
+    if((xmlnode->type() == rapidxml::node_data || xmlnode->type() == rapidxml::node_cdata) && xmlnode->value())
     {
         // case: pure_text
-        jsvalue.SetString(xmlnode->value(), allocator); // then addmember("#text" , jsvalue, allocator)
+        jsvalue.SetString(xmlnode->value(), allocator);  // then addmember("#text" , jsvalue, allocator)
     }
-    else if (xmlnode->type() == rapidxml::node_element)
+    else if(xmlnode->type() == rapidxml::node_element)
     {
-        if (xmlnode->first_attribute())
+        if(xmlnode->first_attribute())
         {
-            if (xmlnode->first_node() && xmlnode->first_node()->type() == rapidxml::node_data && count_children(xmlnode) == 1)
+            if(xmlnode->first_node() && xmlnode->first_node()->type() == rapidxml::node_data && count_children(xmlnode) == 1)
             {
                 // case: <e attr="xxx">text</e>
                 rapidjson::Value jn, jv;
@@ -124,43 +97,43 @@ void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rap
         }
         else
         {
-            if (!xmlnode->first_node())
+            if(!xmlnode->first_node())
             {
                 // case: <e />
                 jsvalue.SetNull();
                 return;
             }
-            else if (xmlnode->first_node()->type() == rapidxml::node_data && count_children(xmlnode) == 1)
+            else if(xmlnode->first_node()->type() == rapidxml::node_data && count_children(xmlnode) == 1)
             {
                 // case: <e>text</e>
                 jsvalue.SetString(rapidjson::StringRef(xmlnode->first_node()->value()), allocator);
                 return;
             }
         }
-        if (xmlnode->first_node())
+        if(xmlnode->first_node())
         {
             // case: complex else...
             std::map<std::string, int> name_count;
-            for (xmlnode_chd = xmlnode->first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
+            for(xmlnode_chd = xmlnode->first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
             {
                 std::string current_name;
                 const char *name_ptr = NULL;
                 rapidjson::Value jn, jv;
-                if (xmlnode_chd->type() == rapidxml::node_data || xmlnode_chd->type() == rapidxml::node_cdata)
+                if(xmlnode_chd->type() == rapidxml::node_data || xmlnode_chd->type() == rapidxml::node_cdata)
                 {
                     current_name = "#text";
                     name_count[current_name]++;
                     jv.SetString("#text", allocator);
                     name_ptr = jv.GetString();
                 }
-                else if (xmlnode_chd->type() == rapidxml::node_element)
+                else if(xmlnode_chd->type() == rapidxml::node_element)
                 {
                     current_name = xmlnode_chd->name();
                     name_count[current_name]++;
                     name_ptr = xmlnode_chd->name();
                 }
                 traverse_node(xmlnode_chd, jsvalue_chd, allocator);
-                if (name_count[current_name] > 1 && name_ptr)
+                if(name_count[current_name] > 1 && name_ptr)
                     to_array_form(name_ptr, jsvalue, jsvalue_chd, allocator);
                 else
                 {
@@ -178,27 +151,28 @@ void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rap
 
 std::string xml2json(const char *xml_str)
 {
-    //file<> fdoc("track_orig.xml");
-    rapidxml::xml_document<> doc;
-    doc.parse<0>(const_cast<char *>(xml_str));
+    //file<> fdoc("track_orig.xml"); // could serve another use case
+    rapidxml::xml_document<> *xml_doc = new rapidxml::xml_document<>();
+    xml_doc->parse<0> (const_cast<char *>(xml_str));
 
-    rapidjson::Document document;
-    document.SetObject();
-    rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+    rapidjson::Document js_doc;
+    js_doc.SetObject();
+    rapidjson::Document::AllocatorType& allocator = js_doc.GetAllocator();
 
     rapidxml::xml_node<> *xmlnode_chd;
 
-    for (xmlnode_chd = doc.first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
+    for(xmlnode_chd = xml_doc->first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
     {
-        //cout << xmlnode_chd->name() << endl;
         rapidjson::Value jsvalue_chd;
         jsvalue_chd.SetObject();
         traverse_node(xmlnode_chd, jsvalue_chd, allocator);
-        document.AddMember(rapidjson::StringRef(xmlnode_chd->name()), jsvalue_chd, allocator);
+        js_doc.AddMember(rapidjson::StringRef(xmlnode_chd->name()), jsvalue_chd, allocator);
     }
+
+    delete xml_doc;
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    document.Accept(writer);
+    js_doc.Accept(writer);
     return buffer.GetString();
 }
 
