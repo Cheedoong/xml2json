@@ -25,12 +25,12 @@ int main(int argc, const char *argv[])
     ifstream inf;
     ofstream outf;
     ostringstream oss;
-    char BOM[4] = {(char)0xEF, (char)0xBB, (char)0xBF, '\0'};
+    char BOM[4] = {(char)0xEF, (char)0xBB, (char)0xBF, '\0'}; /*BOM String*/
     int64_t start_time, end_time;
 
     inf.open("test_track_1.xml");
     outf.open("test_track_1.js.txt");
-    oss.clear();
+    oss.str("");
     oss << inf.rdbuf();
     xml_str = oss.str();
     inf.close();
@@ -43,7 +43,7 @@ int main(int argc, const char *argv[])
 
     inf.open("test_track_2.xml");
     outf.open("test_track_2.js.txt");
-    oss.clear();
+    oss.str("");
     oss << inf.rdbuf();
     xml_str = oss.str();
     inf.close();
@@ -56,7 +56,7 @@ int main(int argc, const char *argv[])
 
     inf.open("test_track_3.xml");
     outf.open("test_track_3.js.txt");
-    oss.clear();
+    oss.str("");
     oss << inf.rdbuf();
     xml_str = oss.str();
     inf.close();
