@@ -165,14 +165,16 @@ std::string xml2json(const char *xml_str)
     {
         rapidjson::Value jsvalue_chd;
         jsvalue_chd.SetObject();
-        rapidjson::Value jsvalue_name(xmlnode_chd->name(), allocator);
-        js_doc.AddMember(jsvalue_name, jsvalue_chd, allocator);
+        //rapidjson::Value jsvalue_name(xmlnode_chd->name(), allocator);
+        //js_doc.AddMember(jsvalue_name, jsvalue_chd, allocator);
+        traverse_node(xmlnode_chd, jsvalue_chd, allocator);
+        js_doc.AddMember(rapidjson::StringRef(xmlnode_chd->name()), jsvalue_chd, allocator);
     }
 
-    delete xml_doc;
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     js_doc.Accept(writer);
+    delete xml_doc;
     return buffer.GetString();
 }
 
