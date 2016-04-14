@@ -1055,7 +1055,7 @@ namespace rapidxml
                 *attrname++ = Ch(':');
                 while (*p) {
                     *attrname++ = *p++;
-                    if ((attrname - freeme) >= (prefix_size + 6)) break;
+                    //if ((attrname - freeme) >= (prefix_size + 6)) break;
                 }
                 *attrname = Ch(0);
                 attrname = freeme;

@@ -1,7 +1,14 @@
 CXX = g++
 
+UNAME := $(shell uname -s)
+ifeq ($(UNAME), Darwin)
+LINKOPTIONS = -Wl,-search_paths_first -Wl,-dead_strip -v
+else
+LINKOPTIONS = -Wl,--gc-sections -Wl,--strip-all
+endif
+
 INCLUDE += -I./include/
-OPTIONS  = -std=c++11 -O3 -fdata-sections -ffunction-sections -Wl,--gc-sections -Wl,--strip-all
+COMPILEOPTIONS  = -std=c++11 -O3
 WARNINGS = -Wall -Wextra -Werror
 
 MAIN 	= xml2json.o
@@ -13,13 +20,13 @@ EXEC 	= xml2json
 all : ${EXEC}
 
 xml2json.gch : include/xml2json.hpp
-	${CXX} ${OPTIONS}  -c $< -o $@
+	${CXX} ${COMPILEOPTIONS}  -c $< -o $@
 
 ${MAIN} : xml2json.cpp
-	${CXX} ${OPTIONS} $(INCLUDE) -c $< -o $@
+	${CXX} ${COMPILEOPTIONS} $(INCLUDE) -c $< -o $@
 
 ${EXEC} : ${MAIN} ${OBJECTS}
-	${CXX} ${OPTIONS} ${MAIN} -o ${EXEC}
+	${CXX} ${LINKOPTIONS} ${MAIN} -o ${EXEC}
 
 clean :
 	rm *.gch *.o ${EXEC}

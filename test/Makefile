@@ -1,8 +1,17 @@
-CC=gcc
-CXX=g++
+C=gcc
+CXX = g++
+
+UNAME := $(shell uname -s)
+ifeq ($(UNAME), Darwin)
+LINKOPTIONS = -Wl,-search_paths_first -Wl,-dead_strip -v
+else
+LINKOPTIONS = -Wl,--gc-sections -Wl,--strip-all
+endif
+
+COMPILEOPTIONS  = -std=c++11 -O3
 INCLUDE += -I../include/
 LIB +=
-CFLAGS+= -Wall -O3 -fdata-sections -ffunction-sections -Wl,--gc-sections -Wl,--strip-all
+
 TARGET=test
 ALL:$(TARGET)
 
@@ -15,13 +24,13 @@ CPP_OBJS := $(patsubst %.cpp,%.o, $(CPP_SRCFILES))
 OBJS := $(C_OBJS) $(CPP_OBJS)
 
 $(TARGET):$(OBJS)
-	$(CXX) $(CFLAGS) -o $@ $^ $(LIB)
+	$(CXX) $(LINKOPTIONS) -o $@ $^ $(LIB)
 
 %.o: %.cpp
-	$(CXX) $(CFLAGS) $(INCLUDE) -c -o $@ $<
+	$(CXX) $(COMPILEOPTIONS) $(INCLUDE) -c -o $@ $<
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(INCLUDE) -c -o $@ $<
+	$(CC) $(COMPILEOPTIONS) $(INCLUDE) -c -o $@ $<
 
 clean:
 	rm -f *.o
