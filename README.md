@@ -152,7 +152,7 @@ o.e.a</code>
 </tbody></table>
 
 ### Tested Under
-+++ Linux
-+++ Mac OS X
-+++ Windows
-+++ OpenWRT
++ Linux
++ Mac OS X
++ Windows
++ OpenWRT
