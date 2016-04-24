@@ -7,10 +7,14 @@ xml2json
 
 xml2json is a header-only C++ library. Just copy the `./include` folder to system or project's include path. Two examples are shown in `xml2json.cpp` and `./test/test.cpp`
 
-### Build and Run a Command Line Tool
+#### Build and Run a Command Line Tool
 ```bash
 make
 ./xml2json input.xml
+```
+#### C++ API
+```C++
+std::string xml2json(const char *xml_str)
 ```
 
 ### Description
