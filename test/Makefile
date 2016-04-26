@@ -1,5 +1,5 @@
-C=gcc
-CXX = g++
+#C=gcc
+#CXX = g++
 
 UNAME := $(shell uname -s)
 ifeq ($(UNAME), Darwin)
@@ -8,7 +8,7 @@ else
 LINKOPTIONS = -Wl,--gc-sections -Wl,--strip-all
 endif
 
-COMPILEOPTIONS  = -std=c++11 -O3
+COMPILEOPTIONS  = -std=c++11 -O3 -fdata-sections -ffunction-sections
 INCLUDE += -I../include/
 LIB +=
 

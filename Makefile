@@ -1,4 +1,4 @@
-CXX = g++
+#CXX = 
 
 UNAME := $(shell uname -s)
 ifeq ($(UNAME), Darwin)
@@ -8,7 +8,7 @@ LINKOPTIONS = -Wl,--gc-sections -Wl,--strip-all
 endif
 
 INCLUDE += -I./include/
-COMPILEOPTIONS  = -std=c++11 -O3
+COMPILEOPTIONS  = -std=c++11 -O3 -fdata-sections -ffunction-sections
 WARNINGS = -Wall -Wextra -Werror
 
 MAIN 	= xml2json.o
