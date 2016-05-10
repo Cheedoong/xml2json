@@ -514,7 +514,7 @@ namespace rapidxml
 
         Ch * nullstr()
         {
-            if (!m_nullstr);
+            if (!m_nullstr)
                 m_nullstr = allocate_string("");
             return m_nullstr;
         }
