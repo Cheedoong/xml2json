@@ -160,3 +160,7 @@ o.e.a</code>
 + Mac OS X
 + Windows
 + OpenWRT
+
+### Donate
+![WeChat Pay](https://raw.githubusercontent.com/Cheedoong/xml2json/master/donate/wechatpay_cheedoong.png)  
+![AliPay](https://raw.githubusercontent.com/Cheedoong/xml2json/master/donate/alipay_cheedoong.jpg)
