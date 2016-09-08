@@ -7,6 +7,7 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <cctype>
 
 #include "rapidxml/rapidxml.hpp"
 #include "rapidxml/rapidxml_utils.hpp"
@@ -22,9 +23,51 @@
 #include "rapidjson/filewritestream.h"
 #include "rapidjson/error/en.h"
 
-// Avoided any namespace pollution.
+/* [Start] This part is configurable */
+static const char xml2json_text_additional_name[] = "#text";
+static const char xml2json_attribute_name_prefix[] = "@";
+/* Example:
+   <node_name attribute_name="attribute_value">value</node_name> ---> "node_name":{"#text":"value","@attribute_name":"attribute_value"}
+*/
+static const bool xml2json_numeric_support = false;
+/* Example:
+   xml2json_numeric_support = false:
+   <number>26.026</number>  ---> "number":"26.026"
+   xml2json_numeric_support = true:
+   <number>26.026</number>  ---> "number":26.026
+*/
+/* [End]   This part is configurable */
 
-void to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
+// Avoided any namespace pollution.
+static bool xml2json_has_digits_only(const char * input, bool *hasDecimal)
+{
+    if (input == nullptr)
+        return false;  // treat empty input as a string (probably will be an empty string)
+
+    const char * runPtr = input;
+
+    *hasDecimal = false;
+
+    while (*runPtr != '\0')
+    {
+        if (*runPtr == '.')
+        {
+            if (!(*hasDecimal))
+                *hasDecimal = true;
+            else
+                return false; // we found two dots - not a number
+        }
+        else if (isalpha(*runPtr))
+        {
+            return false;
+        }
+        runPtr++;
+    }
+
+    return true;
+}
+
+void xml2json_to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
 {
     rapidjson::Value jsvalue_target; // target to do some operation
     rapidjson::Value jn;             // this is a must, partially because of the latest version of rapidjson
@@ -48,19 +91,44 @@ void to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value
     }
 }
 
-void add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
+void xml2json_add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
 {
     rapidxml::xml_attribute<> *myattr;
     for(myattr = xmlnode->first_attribute(); myattr; myattr = myattr->next_attribute())
     {
         rapidjson::Value jn, jv;
-        jn.SetString((std::string("@") + myattr->name()).c_str(), allocator);
-        jv.SetString(myattr->value(), allocator);
+        jn.SetString((std::string(xml2json_attribute_name_prefix) + myattr->name()).c_str(), allocator);
+
+        if (xml2json_numeric_support == false)
+        {
+            jv.SetString(myattr->value(), allocator);
+        }
+        else
+        {
+            bool hasDecimal;
+            if (xml2json_has_digits_only(myattr->value(), &hasDecimal) == false)
+            {
+                jv.SetString(myattr->value(), allocator);
+            }
+            else
+            {
+                if (hasDecimal)
+                {
+                    double value = std::strtod(myattr->value(),nullptr);
+                    jv.SetDouble(value);
+                }
+                else
+                {
+                    long int value = std::strtol(myattr->value(), nullptr, 0);
+                    jv.SetInt(value);
+                }
+            }
+        }
         jsvalue.AddMember(jn, jv, allocator);
     }
 }
 
-void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
+void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
 {
     //cout << "this: " << xmlnode->type() << " name: " << xmlnode->name() << " value: " << xmlnode->value() << endl;
     rapidjson::Value jsvalue_chd;
@@ -83,16 +151,16 @@ void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rap
             {
                 // case: <e attr="xxx">text</e>
                 rapidjson::Value jn, jv;
-                jn.SetString("#text", allocator);
+                jn.SetString(xml2json_text_additional_name, allocator);
                 jv.SetString(xmlnode->first_node()->value(), allocator);
                 jsvalue.AddMember(jn, jv, allocator);
-                add_attributes(xmlnode, jsvalue, allocator);
+                xml2json_add_attributes(xmlnode, jsvalue, allocator);
                 return;
             }
             else
             {
                 // case: <e attr="xxx">...</e>
-                add_attributes(xmlnode, jsvalue, allocator);
+                xml2json_add_attributes(xmlnode, jsvalue, allocator);
             }
         }
         else
@@ -106,7 +174,31 @@ void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rap
             else if(xmlnode->first_node()->type() == rapidxml::node_data && count_children(xmlnode) == 1)
             {
                 // case: <e>text</e>
-                jsvalue.SetString(rapidjson::StringRef(xmlnode->first_node()->value()), allocator);
+                if (xml2json_numeric_support == false)
+                {
+                    jsvalue.SetString(rapidjson::StringRef(xmlnode->first_node()->value()), allocator);
+                }
+                else
+                {
+                    bool hasDecimal;
+                    if (xml2json_has_digits_only(xmlnode->first_node()->value(), &hasDecimal) == false)
+                    {
+                        jsvalue.SetString(rapidjson::StringRef(xmlnode->first_node()->value()), allocator);
+                    }
+                    else
+                    {
+                        if (hasDecimal)
+                        {
+                            double value = std::strtod(xmlnode->first_node()->value(), nullptr);
+                            jsvalue.SetDouble(value);
+                        }
+                        else
+                        {
+                            long int value = std::strtol(xmlnode->first_node()->value(), nullptr, 0);
+                            jsvalue.SetInt(value);
+                        }
+                    }
+                }
                 return;
             }
         }
@@ -121,9 +213,9 @@ void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rap
                 rapidjson::Value jn, jv;
                 if(xmlnode_chd->type() == rapidxml::node_data || xmlnode_chd->type() == rapidxml::node_cdata)
                 {
-                    current_name = "#text";
+                    current_name = xml2json_text_additional_name;
                     name_count[current_name]++;
-                    jv.SetString("#text", allocator);
+                    jv.SetString(xml2json_text_additional_name, allocator);
                     name_ptr = jv.GetString();
                 }
                 else if(xmlnode_chd->type() == rapidxml::node_element)
@@ -132,9 +224,9 @@ void traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rap
                     name_count[current_name]++;
                     name_ptr = xmlnode_chd->name();
                 }
-                traverse_node(xmlnode_chd, jsvalue_chd, allocator);
+                xml2json_traverse_node(xmlnode_chd, jsvalue_chd, allocator);
                 if(name_count[current_name] > 1 && name_ptr)
-                    to_array_form(name_ptr, jsvalue, jsvalue_chd, allocator);
+                    xml2json_to_array_form(name_ptr, jsvalue, jsvalue_chd, allocator);
                 else
                 {
                     jn.SetString(name_ptr, allocator);
@@ -167,7 +259,7 @@ std::string xml2json(const char *xml_str)
         jsvalue_chd.SetObject();
         //rapidjson::Value jsvalue_name(xmlnode_chd->name(), allocator);
         //js_doc.AddMember(jsvalue_name, jsvalue_chd, allocator);
-        traverse_node(xmlnode_chd, jsvalue_chd, allocator);
+        xml2json_traverse_node(xmlnode_chd, jsvalue_chd, allocator);
         js_doc.AddMember(rapidjson::StringRef(xmlnode_chd->name()), jsvalue_chd, allocator);
     }
 
