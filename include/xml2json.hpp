@@ -47,7 +47,13 @@ static bool xml2json_has_digits_only(const char * input, bool *hasDecimal)
     const char * runPtr = input;
 
     *hasDecimal = false;
-
+	
+	//Check for negative number
+    if (*runPtr == '-')
+    {
+        runPtr++;
+    }
+	
     while (*runPtr != '\0')
     {
         if (*runPtr == '.')
@@ -57,7 +63,7 @@ static bool xml2json_has_digits_only(const char * input, bool *hasDecimal)
             else
                 return false; // we found two dots - not a number
         }
-        else if (isalpha(*runPtr))
+        else if (!isdigit(*runPtr))
         {
             return false;
         }
