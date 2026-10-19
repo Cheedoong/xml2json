@@ -11,6 +11,8 @@
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>
+#include <cstring>
+#include <stdexcept>
 
 #include "rapidxml/rapidxml.hpp"
 #include "rapidxml/rapidxml_utils.hpp"
@@ -405,6 +407,202 @@ inline std::string xml2json(const char *xml_str, int indent)
 inline std::string xml2json(const char *xml_str)
 {
     return xml2json(xml_str, xml2json_options());
+}
+
+/* [Start] JSON -> XML (issue #14) */
+
+// json2xml() is the (best effort) inverse of xml2json() and follows the very
+// same conventions, so that the two compositions round-trip:
+//   * an object member whose name starts with '@' becomes an XML attribute,
+//   * the member "#text" becomes the text content of the element,
+//   * every other member becomes a child element,
+//   * an array becomes the element repeated once per item,
+//   * "#order" (produced by xml2json_options::order) is ignored.
+// The top level is expected to be an object, as produced by xml2json(); each of
+// its members becomes one root element.  No XML declaration is emitted, which is
+// what makes xml2json(json2xml(json)) round-trip.  A bare array/scalar at the
+// top level is wrapped in an element named "root".
+//
+// Limitation: XML with mixed content (an element that has both text and element
+// children, e.g. "<p>a<b/>c</p>") cannot round-trip exactly, because xml2json
+// already loses the relative position of the text: it collects the text nodes
+// into a single "#text" member.  json2xml therefore keeps all the text (it
+// concatenates a "#text" array) but places it before the child elements.
+//
+// Throws std::runtime_error when the JSON cannot be parsed.
+/* [End]   JSON -> XML */
+
+inline std::string json2xml_escape(const char *text, std::size_t size, bool attribute)
+{
+    std::string out;
+    out.reserve(size);
+    for(std::size_t i = 0; i < size; ++i)
+    {
+        switch(text[i])
+        {
+        case '&': out += "&amp;";  break;
+        case '<': out += "&lt;";   break;
+        case '>': out += "&gt;";   break;
+        case '"': if(attribute) out += "&quot;"; else out += text[i]; break;
+        default:  out += text[i];  break;
+        }
+    }
+    return out;
+}
+
+// Text representation of a JSON scalar.  Numbers are rendered through
+// rapidjson's own writer so that they keep their exact representation.
+inline std::string json2xml_value_text(const rapidjson::Value &value)
+{
+    if (value.IsArray())
+    {
+        // "#text" is an array when an element has several text nodes (mixed
+        // content); concatenate them so that no text is lost.
+        std::string out;
+        for(rapidjson::Value::ConstValueIterator it = value.Begin(); it != value.End(); ++it)
+            out += json2xml_value_text(*it);
+        return out;
+    }
+    if (value.IsString())
+        return std::string(value.GetString(), value.GetStringLength());
+    if (value.IsBool())
+        return value.GetBool() ? std::string("true") : std::string("false");
+    if (value.IsNumber())
+    {
+        rapidjson::StringBuffer buffer;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        value.Accept(writer);
+        return std::string(buffer.GetString(), buffer.GetSize());
+    }
+    return std::string(); // null, object and array are not text
+}
+
+inline void json2xml_write_element(const std::string &name, const rapidjson::Value &value, std::string &out, int indent_width, int depth)
+{
+    if (value.IsArray())
+    {
+        // an array is the same element repeated once per item
+        for(rapidjson::Value::ConstValueIterator it = value.Begin(); it != value.End(); ++it)
+            json2xml_write_element(name, *it, out, indent_width, depth);
+        return;
+    }
+
+    const bool pretty = indent_width > 0;
+    const std::string pad(pretty ? static_cast<std::size_t>(indent_width) * static_cast<std::size_t>(depth) : 0, ' ');
+
+    std::string attributes;
+    const rapidjson::Value *text = 0;
+    int child_count = 0;
+
+    if (value.IsObject())
+    {
+        for(rapidjson::Value::ConstMemberIterator it = value.MemberBegin(); it != value.MemberEnd(); ++it)
+        {
+            const char *member = it->name.GetString();
+            if (it->name.GetStringLength() > 0 && member[0] == '@')
+            {
+                const std::string attribute_value = json2xml_value_text(it->value);
+                attributes += ' ';
+                attributes += (member + 1);
+                attributes += "=\"";
+                attributes += json2xml_escape(attribute_value.c_str(), attribute_value.size(), true);
+                attributes += '"';
+            }
+            else if (std::strcmp(member, xml2json_text_additional_name) == 0)
+            {
+                if (it->value.IsNull() == false)
+                    text = &it->value;
+            }
+            else if (std::strcmp(member, xml2json_order_additional_name) == 0)
+            {
+                // ordering information emitted by xml2json: not real content
+            }
+            else
+            {
+                ++child_count;
+            }
+        }
+    }
+    else if (value.IsNull() == false)
+    {
+        text = &value;
+    }
+
+    out += pad;
+    out += '<';
+    out += name;
+    out += attributes;
+
+    if (child_count == 0 && text == 0)
+    {
+        out += "/>";
+        if (pretty)
+            out += '\n';
+        return;
+    }
+
+    out += '>';
+    if (text)
+    {
+        const std::string text_value = json2xml_value_text(*text);
+        out += json2xml_escape(text_value.c_str(), text_value.size(), false);
+    }
+
+    if (child_count > 0)
+    {
+        if (pretty)
+            out += '\n';
+        for(rapidjson::Value::ConstMemberIterator it = value.MemberBegin(); it != value.MemberEnd(); ++it)
+        {
+            const char *member = it->name.GetString();
+            if (it->name.GetStringLength() > 0 && member[0] == '@')
+                continue;
+            if (std::strcmp(member, xml2json_text_additional_name) == 0 || std::strcmp(member, xml2json_order_additional_name) == 0)
+                continue;
+            json2xml_write_element(std::string(member, it->name.GetStringLength()), it->value, out, indent_width, depth + 1);
+        }
+        out += pad;
+    }
+
+    out += "</";
+    out += name;
+    out += '>';
+    if (pretty)
+        out += '\n';
+}
+
+inline std::string json2xml(const char *json_str, int indent_width)
+{
+    if (json_str == nullptr)
+        return std::string();
+
+    rapidjson::Document js_doc;
+    js_doc.Parse(json_str);
+    if (js_doc.HasParseError())
+        throw std::runtime_error(std::string("json2xml: invalid JSON at offset ") +
+                                 std::to_string(static_cast<long long>(js_doc.GetErrorOffset())) +
+                                 ": " + rapidjson::GetParseError_En(js_doc.GetParseError()));
+
+    std::string out;
+    if (js_doc.IsObject())
+    {
+        for(rapidjson::Value::ConstMemberIterator it = js_doc.MemberBegin(); it != js_doc.MemberEnd(); ++it)
+            json2xml_write_element(std::string(it->name.GetString(), it->name.GetStringLength()), it->value, out, indent_width, 0);
+    }
+    else if (js_doc.IsNull() == false)
+    {
+        json2xml_write_element("root", js_doc, out, indent_width, 0); // a bare array/scalar needs a name
+    }
+
+    if (indent_width > 0 && out.empty() == false && out[out.size() - 1] == '\n')
+        out.erase(out.size() - 1);
+
+    return out;
+}
+
+inline std::string json2xml(const char *json_str)
+{
+    return json2xml(json_str, 0);
 }
 
 #endif
