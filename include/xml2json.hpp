@@ -39,7 +39,7 @@ static const bool xml2json_numeric_support = false;
 /* [End]   This part is configurable */
 
 // Avoided any namespace pollution.
-static bool xml2json_has_digits_only(const char * input, bool *hasDecimal)
+inline bool xml2json_has_digits_only(const char * input, bool *hasDecimal)
 {
     if (input == nullptr)
         return false;  // treat empty input as a string (probably will be an empty string)
@@ -67,7 +67,7 @@ static bool xml2json_has_digits_only(const char * input, bool *hasDecimal)
     return true;
 }
 
-void xml2json_to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
+inline void xml2json_to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
 {
     rapidjson::Value jsvalue_target; // target to do some operation
     rapidjson::Value jn;             // this is a must, partially because of the latest version of rapidjson
@@ -91,7 +91,7 @@ void xml2json_to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjs
     }
 }
 
-void xml2json_add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
+inline void xml2json_add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
 {
     rapidxml::xml_attribute<> *myattr;
     for(myattr = xmlnode->first_attribute(); myattr; myattr = myattr->next_attribute())
@@ -128,7 +128,7 @@ void xml2json_add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Value &js
     }
 }
 
-void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
+inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator)
 {
     //cout << "this: " << xmlnode->type() << " name: " << xmlnode->name() << " value: " << xmlnode->value() << endl;
     rapidjson::Value jsvalue_chd;
@@ -241,7 +241,7 @@ void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsv
     }
 }
 
-std::string xml2json(const char *xml_str)
+inline std::string xml2json(const char *xml_str)
 {
     //file<> fdoc("track_orig.xml"); // could serve another use case
     rapidxml::xml_document<> *xml_doc = new rapidxml::xml_document<>();
