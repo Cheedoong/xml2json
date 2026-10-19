@@ -242,22 +242,27 @@ inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Val
 
 inline std::string xml2json(const char *xml_str)
 {
-    //file<> fdoc("track_orig.xml"); // could serve another use case
-    rapidxml::xml_document<> *xml_doc = new rapidxml::xml_document<>();
-    xml_doc->parse<0> (const_cast<char *>(xml_str));
-
     rapidjson::Document js_doc;
     js_doc.SetObject();
+
+    if (xml_str == nullptr)
+        return "{}";
+
+    // RapidXML parses in place and therefore needs a writable, NUL-terminated
+    // buffer.  Copy the caller's input, which is const and may live in
+    // read-only memory (a string literal, std::string::c_str(), ...); the old
+    // const_cast<char*> version wrote into it and crashed (access violation)
+    // whenever a string literal was passed in.
+    std::string xml_buffer(xml_str);
+    rapidxml::xml_document<> xml_doc;
+    xml_doc.parse<0>(&xml_buffer[0]);
+
     rapidjson::Document::AllocatorType& allocator = js_doc.GetAllocator();
 
-    rapidxml::xml_node<> *xmlnode_chd;
-
-    for(xmlnode_chd = xml_doc->first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
+    for(rapidxml::xml_node<> *xmlnode_chd = xml_doc.first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
     {
         rapidjson::Value jsvalue_chd;
         jsvalue_chd.SetObject();
-        //rapidjson::Value jsvalue_name(xmlnode_chd->name(), allocator);
-        //js_doc.AddMember(jsvalue_name, jsvalue_chd, allocator);
         xml2json_traverse_node(xmlnode_chd, jsvalue_chd, allocator);
         js_doc.AddMember(rapidjson::StringRef(xmlnode_chd->name()), jsvalue_chd, allocator);
     }
@@ -265,7 +270,6 @@ inline std::string xml2json(const char *xml_str)
     rapidjson::StringBuffer buffer;
     rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
     js_doc.Accept(writer);
-    delete xml_doc;
     return buffer.GetString();
 }
 
