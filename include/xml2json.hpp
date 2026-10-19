@@ -8,6 +8,8 @@
 #include <map>
 #include <string>
 #include <cctype>
+#include <cerrno>
+#include <cstdlib>
 
 #include "rapidxml/rapidxml.hpp"
 #include "rapidxml/rapidxml_utils.hpp"
@@ -39,32 +41,78 @@ static const bool xml2json_numeric_support = false;
 /* [End]   This part is configurable */
 
 // Avoided any namespace pollution.
+//
+// Returns true only if the *whole* string is a well-formed decimal number,
+// e.g. "123", "-123", "+1.5", "0.5", "5.".  Empty strings, surrounding or
+// embedded whitespace, embedded separators ("99921-58-10-7"), hexadecimal /
+// exponent forms ("0x10", "1e5") and any other trailing junk are rejected,
+// so that such values remain JSON strings instead of being silently truncated.
 inline bool xml2json_has_digits_only(const char * input, bool *hasDecimal)
 {
+    *hasDecimal = false;
+
     if (input == nullptr)
         return false;  // treat empty input as a string (probably will be an empty string)
 
     const char * runPtr = input;
 
-    *hasDecimal = false;
+    if (*runPtr == '+' || *runPtr == '-') // optional leading sign
+        runPtr++;
 
+    bool hasDigit = false;
     while (*runPtr != '\0')
     {
         if (*runPtr == '.')
         {
-            if (!(*hasDecimal))
-                *hasDecimal = true;
-            else
+            if (*hasDecimal)
                 return false; // we found two dots - not a number
+            *hasDecimal = true;
         }
-        else if (isalpha(*runPtr))
+        else if (isdigit(static_cast<unsigned char>(*runPtr)))
         {
-            return false;
+            hasDigit = true;
+        }
+        else
+        {
+            return false; // any other character (letter, sign, space, ...) - not a number
         }
         runPtr++;
     }
 
-    return true;
+    return hasDigit;
+}
+
+// Stores a piece of XML text into @jsvalue.  When xml2json_numeric_support is
+// enabled and the whole text is numeric it becomes a JSON number, otherwise it
+// stays a JSON string.  Integer values use strtoll() so 64-bit (and negative)
+// values are not truncated, falling back to double only on overflow.
+inline void xml2json_set_text(rapidjson::Value &jsvalue, const char *text, rapidjson::Document::AllocatorType& allocator)
+{
+    if (text == nullptr)
+    {
+        jsvalue.SetNull();
+        return;
+    }
+
+    bool hasDecimal = false;
+    if (xml2json_numeric_support == false || xml2json_has_digits_only(text, &hasDecimal) == false)
+    {
+        jsvalue.SetString(text, allocator);
+        return;
+    }
+
+    if (hasDecimal)
+    {
+        jsvalue.SetDouble(std::strtod(text, nullptr));
+        return;
+    }
+
+    errno = 0;
+    long long value = std::strtoll(text, nullptr, 10);
+    if (errno == ERANGE)
+        jsvalue.SetDouble(std::strtod(text, nullptr)); // out of long long range - keep full value
+    else
+        jsvalue.SetInt64(value);
 }
 
 inline void xml2json_to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
@@ -98,32 +146,7 @@ inline void xml2json_add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Va
     {
         rapidjson::Value jn, jv;
         jn.SetString((std::string(xml2json_attribute_name_prefix) + myattr->name()).c_str(), allocator);
-
-        if (xml2json_numeric_support == false)
-        {
-            jv.SetString(myattr->value(), allocator);
-        }
-        else
-        {
-            bool hasDecimal;
-            if (xml2json_has_digits_only(myattr->value(), &hasDecimal) == false)
-            {
-                jv.SetString(myattr->value(), allocator);
-            }
-            else
-            {
-                if (hasDecimal)
-                {
-                    double value = std::strtod(myattr->value(),nullptr);
-                    jv.SetDouble(value);
-                }
-                else
-                {
-                    long int value = std::strtol(myattr->value(), nullptr, 0);
-                    jv.SetInt(value);
-                }
-            }
-        }
+        xml2json_set_text(jv, myattr->value(), allocator);
         jsvalue.AddMember(jn, jv, allocator);
     }
 }
@@ -152,7 +175,7 @@ inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Val
                 // case: <e attr="xxx">text</e>
                 rapidjson::Value jn, jv;
                 jn.SetString(xml2json_text_additional_name, allocator);
-                jv.SetString(xmlnode->first_node()->value(), allocator);
+                xml2json_set_text(jv, xmlnode->first_node()->value(), allocator);
                 jsvalue.AddMember(jn, jv, allocator);
                 xml2json_add_attributes(xmlnode, jsvalue, allocator);
                 return;
@@ -174,31 +197,7 @@ inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Val
             else if(xmlnode->first_node()->type() == rapidxml::node_data && count_children(xmlnode) == 1)
             {
                 // case: <e>text</e>
-                if (xml2json_numeric_support == false)
-                {
-                    jsvalue.SetString(rapidjson::StringRef(xmlnode->first_node()->value()), allocator);
-                }
-                else
-                {
-                    bool hasDecimal;
-                    if (xml2json_has_digits_only(xmlnode->first_node()->value(), &hasDecimal) == false)
-                    {
-                        jsvalue.SetString(rapidjson::StringRef(xmlnode->first_node()->value()), allocator);
-                    }
-                    else
-                    {
-                        if (hasDecimal)
-                        {
-                            double value = std::strtod(xmlnode->first_node()->value(), nullptr);
-                            jsvalue.SetDouble(value);
-                        }
-                        else
-                        {
-                            long int value = std::strtol(xmlnode->first_node()->value(), nullptr, 0);
-                            jsvalue.SetInt(value);
-                        }
-                    }
-                }
+                xml2json_set_text(jsvalue, xmlnode->first_node()->value(), allocator);
                 return;
             }
         }
