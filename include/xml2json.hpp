@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cctype>
@@ -353,12 +354,18 @@ inline rapidjson::Document xml2json_document(const char *xml_str, const xml2json
     // const_cast<char*> version wrote into it and crashed (access violation)
     // whenever a string literal was passed in.
     std::string xml_buffer(xml_str);
-    rapidxml::xml_document<> xml_doc;
-    xml_doc.parse<0>(&xml_buffer[0]);
+
+    // rapidxml::xml_document<> embeds a RAPIDXML_STATIC_POOL_SIZE (64 KiB)
+    // buffer, so a local instance would add ~64 KiB to this function's stack
+    // frame (issue #5).  Keep the document on the heap instead; it is
+    // destroyed when the function returns, after every name and value has
+    // been copied into js_doc's allocator.
+    std::unique_ptr<rapidxml::xml_document<> > xml_doc(new rapidxml::xml_document<>());
+    xml_doc->parse<0>(&xml_buffer[0]);
 
     rapidjson::Document::AllocatorType& allocator = js_doc.GetAllocator();
 
-    for(rapidxml::xml_node<> *xmlnode_chd = xml_doc.first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
+    for(rapidxml::xml_node<> *xmlnode_chd = xml_doc->first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
     {
         if(xmlnode_chd->type() != rapidxml::node_element)
             continue; // ignore non-element nodes at the top level
