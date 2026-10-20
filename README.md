@@ -112,6 +112,7 @@ rapidjson::Document xml2json_document(const char *xml_str,
 // JSON -> XML
 std::string         json2xml(const char *json_str);
 std::string         json2xml(const char *json_str, int indent);
+std::string         json2xml(const char *json_str, const xml2json_options &options);
 ```
 
 ### Options
@@ -186,13 +187,26 @@ std::cout << xml2json(xml, options);
 
 ### json2xml
 
-`json2xml()` implements the inverse of the rules above: `@name` members become
-attributes, `#text` becomes the text content, other members become child
-elements, arrays repeat the element, and the `#order` member is ignored.  A
-`null` value becomes a self-closing element:
+`json2xml()` implements the inverse of the rules above: members prefixed with
+`attribute_prefix` (by default `@`) become attributes, the `text_name` member (by
+default `#text`) becomes the text content, other members become child elements,
+arrays repeat the element, and the `order_name` member (by default `#order`) is
+ignored.  A `null` value becomes a self-closing element:
 
 ```cpp
 json2xml("{\"a\":{\"@id\":\"9\",\"b\":[1,2]}}");  // <a id="9"><b>1</b><b>2</b></a>
+```
+
+The `json2xml(json, options)` overload applies the same `text_name`,
+`attribute_prefix` and `order_name` as `xml2json`, so a customised conversion
+stays symmetric.  When `attribute_prefix` is empty there is no way to tell an
+attribute from a child element, so every member is written as a child element
+rather than being dropped:
+
+```cpp
+xml2json_options options;
+options.attribute_prefix = "";           // no attribute prefix
+json2xml("{\"a\":{\"id\":\"9\"}}", options);  // <a><id>9</id></a>
 ```
 
 Text and attribute values are escaped, and numbers keep their exact

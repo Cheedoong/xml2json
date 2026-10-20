@@ -492,18 +492,29 @@ inline std::string json2xml_value_text(const rapidjson::Value &value)
     return std::string(); // null, object and array are not text
 }
 
-inline void json2xml_write_element(const std::string &name, const rapidjson::Value &value, std::string &out, int indent_width, int depth)
+// True when a JSON member name denotes an XML attribute, i.e. it starts with
+// the configured prefix.  With an empty prefix nothing is an attribute: the
+// caller cannot distinguish attributes from children, so every member is
+// written as a child element instead of being silently dropped.
+inline bool json2xml_member_is_attribute(const char *member, std::size_t length, const std::string &prefix)
+{
+    return prefix.empty() == false
+        && length >= prefix.size()
+        && std::memcmp(member, prefix.c_str(), prefix.size()) == 0;
+}
+
+inline void json2xml_write_element(const std::string &name, const rapidjson::Value &value, std::string &out, const xml2json_options &options, int depth)
 {
     if (value.IsArray())
     {
         // an array is the same element repeated once per item
         for(rapidjson::Value::ConstValueIterator it = value.Begin(); it != value.End(); ++it)
-            json2xml_write_element(name, *it, out, indent_width, depth);
+            json2xml_write_element(name, *it, out, options, depth);
         return;
     }
 
-    const bool pretty = indent_width > 0;
-    const std::string pad(pretty ? static_cast<std::size_t>(indent_width) * static_cast<std::size_t>(depth) : 0, ' ');
+    const bool pretty = options.indent > 0;
+    const std::string pad(pretty ? static_cast<std::size_t>(options.indent) * static_cast<std::size_t>(depth) : 0, ' ');
 
     std::string attributes;
     const rapidjson::Value *text = 0;
@@ -514,21 +525,23 @@ inline void json2xml_write_element(const std::string &name, const rapidjson::Val
         for(rapidjson::Value::ConstMemberIterator it = value.MemberBegin(); it != value.MemberEnd(); ++it)
         {
             const char *member = it->name.GetString();
-            if (it->name.GetStringLength() > 0 && member[0] == '@')
+            const std::size_t member_length = it->name.GetStringLength();
+            if (json2xml_member_is_attribute(member, member_length, options.attribute_prefix))
             {
                 const std::string attribute_value = json2xml_value_text(it->value);
                 attributes += ' ';
-                attributes += (member + 1);
+                attributes.append(member + options.attribute_prefix.size(),
+                                  member_length - options.attribute_prefix.size());
                 attributes += "=\"";
                 attributes += json2xml_escape(attribute_value.c_str(), attribute_value.size(), true);
                 attributes += '"';
             }
-            else if (std::strcmp(member, xml2json_text_additional_name) == 0)
+            else if (std::strcmp(member, options.text_name.c_str()) == 0)
             {
                 if (it->value.IsNull() == false)
                     text = &it->value;
             }
-            else if (std::strcmp(member, xml2json_order_additional_name) == 0)
+            else if (std::strcmp(member, options.order_name.c_str()) == 0)
             {
                 // ordering information emitted by xml2json: not real content
             }
@@ -570,11 +583,11 @@ inline void json2xml_write_element(const std::string &name, const rapidjson::Val
         for(rapidjson::Value::ConstMemberIterator it = value.MemberBegin(); it != value.MemberEnd(); ++it)
         {
             const char *member = it->name.GetString();
-            if (it->name.GetStringLength() > 0 && member[0] == '@')
+            if (json2xml_member_is_attribute(member, it->name.GetStringLength(), options.attribute_prefix))
                 continue;
-            if (std::strcmp(member, xml2json_text_additional_name) == 0 || std::strcmp(member, xml2json_order_additional_name) == 0)
+            if (std::strcmp(member, options.text_name.c_str()) == 0 || std::strcmp(member, options.order_name.c_str()) == 0)
                 continue;
-            json2xml_write_element(std::string(member, it->name.GetStringLength()), it->value, out, indent_width, depth + 1);
+            json2xml_write_element(std::string(member, it->name.GetStringLength()), it->value, out, options, depth + 1);
         }
         out += pad;
     }
@@ -586,7 +599,7 @@ inline void json2xml_write_element(const std::string &name, const rapidjson::Val
         out += '\n';
 }
 
-inline std::string json2xml(const char *json_str, int indent_width)
+inline std::string json2xml(const char *json_str, const xml2json_options &options)
 {
     if (json_str == nullptr)
         return std::string();
@@ -602,17 +615,24 @@ inline std::string json2xml(const char *json_str, int indent_width)
     if (js_doc.IsObject())
     {
         for(rapidjson::Value::ConstMemberIterator it = js_doc.MemberBegin(); it != js_doc.MemberEnd(); ++it)
-            json2xml_write_element(std::string(it->name.GetString(), it->name.GetStringLength()), it->value, out, indent_width, 0);
+            json2xml_write_element(std::string(it->name.GetString(), it->name.GetStringLength()), it->value, out, options, 0);
     }
     else if (js_doc.IsNull() == false)
     {
-        json2xml_write_element("root", js_doc, out, indent_width, 0); // a bare array/scalar needs a name
+        json2xml_write_element("root", js_doc, out, options, 0); // a bare array/scalar needs a name
     }
 
-    if (indent_width > 0 && out.empty() == false && out[out.size() - 1] == '\n')
+    if (options.indent > 0 && out.empty() == false && out[out.size() - 1] == '\n')
         out.erase(out.size() - 1);
 
     return out;
+}
+
+inline std::string json2xml(const char *json_str, int indent_width)
+{
+    xml2json_options options;
+    options.indent = indent_width;
+    return json2xml(json_str, options);
 }
 
 inline std::string json2xml(const char *json_str)
