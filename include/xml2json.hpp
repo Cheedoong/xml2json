@@ -11,6 +11,7 @@
 #include <vector>
 #include <cctype>
 #include <cerrno>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
@@ -149,18 +150,37 @@ inline void xml2json_set_text(rapidjson::Value &jsvalue, const char *text, rapid
         return;
     }
 
+    // strtod() reports overflow and underflow through ERANGE.  A value that does
+    // not fit into a double becomes infinity, and RapidJSON's writer refuses to
+    // serialise infinity: Accept() would stop in the middle of the document and
+    // leave truncated JSON behind.  Such text therefore stays a string.
     if (hasDecimal)
     {
-        jsvalue.SetDouble(std::strtod(text, nullptr));
+        errno = 0;
+        const double value = std::strtod(text, nullptr);
+        if (errno == ERANGE || std::isfinite(value) == false)
+            jsvalue.SetString(text, allocator);
+        else
+            jsvalue.SetDouble(value);
         return;
     }
 
     errno = 0;
-    long long value = std::strtoll(text, nullptr, 10);
-    if (errno == ERANGE)
-        jsvalue.SetDouble(std::strtod(text, nullptr)); // out of long long range - keep full value
-    else
+    const long long value = std::strtoll(text, nullptr, 10);
+    if (errno != ERANGE)
+    {
         jsvalue.SetInt64(value);
+        return;
+    }
+
+    // Out of long long range: fall back to double, but keep the original text
+    // when even that would overflow (see above).
+    errno = 0;
+    const double fallback = std::strtod(text, nullptr);
+    if (errno == ERANGE || std::isfinite(fallback) == false)
+        jsvalue.SetString(text, allocator);
+    else
+        jsvalue.SetDouble(fallback);
 }
 
 // Element name as it should appear in the JSON: the local name by default, or
@@ -388,18 +408,21 @@ inline std::string xml2json(const char *xml_str, const xml2json_options &options
     rapidjson::Document js_doc = xml2json_document(xml_str, options);
 
     rapidjson::StringBuffer buffer;
+    bool serialised = false;
     if(options.indent > 0)
     {
         rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
-        writer.SetIndent(' ', options.indent);
-        js_doc.Accept(writer);
+        writer.SetIndent(' ', static_cast<unsigned>(options.indent));
+        serialised = js_doc.Accept(writer);
     }
     else
     {
         rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-        js_doc.Accept(writer);
+        serialised = js_doc.Accept(writer);
     }
-    return buffer.GetString();
+    if (serialised == false)
+        throw std::runtime_error("xml2json: failed to serialise the JSON output");
+    return std::string(buffer.GetString(), buffer.GetSize());
 }
 
 //! Convenience overload: pretty print with @indent spaces per level when

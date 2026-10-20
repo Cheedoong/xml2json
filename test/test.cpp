@@ -184,6 +184,16 @@ int main(int argc, char *argv[])
         check_equal(xml2json("<r><i>123456789012345678</i></r>", numeric), "{\"r\":{\"i\":123456789012345678}}", "64-bit integer is not truncated");
         check_equal(xml2json("<r><i/></r>", numeric), "{\"r\":{\"i\":null}}", "empty element is not a number");
         check_equal(xml2json("<r x=\"99921-58-10-7\"/>", numeric), "{\"r\":{\"@x\":\"99921-58-10-7\"}}", "attributes use the same rule");
+
+        // A literal that does not fit into a double used to become +inf; the
+        // RapidJSON writer rejects infinity, which left the JSON truncated.
+        const std::string huge(400, '9');
+        check_equal(xml2json(("<r><i>" + huge + "</i></r>").c_str(), numeric),
+                    "{\"r\":{\"i\":\"" + huge + "\"}}",
+                    "integer beyond double range stays a string");
+        check_equal(xml2json(("<r><i>" + huge + ".0</i></r>").c_str(), numeric),
+                    "{\"r\":{\"i\":\"" + huge + ".0\"}}",
+                    "decimal beyond double range stays a string");
     }
 
     std::cout << "\n=== issue #19: xml2json_document() ===\n";
