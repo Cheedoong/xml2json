@@ -243,6 +243,13 @@ int main(int argc, char *argv[])
     check_equal(json2xml("{\"a\":{\"#text\":\"a<b&c\"}}"), "<a>a&lt;b&amp;c</a>", "text is escaped");
     check_equal(json2xml("{\"a\":{\"@x\":\"&\\\"\"}}"), "<a x=\"&amp;&quot;\"/>", "attributes are escaped");
     check_equal(json2xml("{\"a\":{\"n\":42,\"d\":1.5}}"), "<a><n>42</n><d>1.5</d></a>", "numbers keep their form");
+    check_equal(json2xml("{\"a\":{\"n\":1e5,\"d\":1.2300}}"), "<a><n>100000.0</n><d>1.23</d></a>", "numbers use the shortest round-trip form");
+    check_equal(json2xml("{\"a\":{\"i\":123456789012345678}}"), "<a><i>123456789012345678</i></a>", "64-bit integers stay exact");
+    check_equal(json2xml("{\"a\":{\"@x\":[1,2]}}"), "<a x=\"12\"/>", "array attribute values are concatenated");
+    check_equal(json2xml("{\"a\":{\"#text\":[\"x\",\"y\"]}}"), "<a>xy</a>", "#text arrays are concatenated");
+    check_equal(json2xml("[1,2]"), "<root>1</root><root>2</root>", "top-level arrays are wrapped in root");
+    check_equal(json2xml("42"), "<root>42</root>", "top-level scalars are wrapped in root");
+    check_equal(json2xml("{\"a\":{\"#order\":[\"b\"],\"b\":\"1\"}}"), "<a><b>1</b></a>", "#order is ignored");
     {
         bool threw = false;
         try
