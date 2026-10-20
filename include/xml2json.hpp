@@ -5,9 +5,10 @@
 // Copyright (C) 2013 Alan Zhuang (Cheedoong)	Tencent, Inc.
 
 #include <iostream>
-#include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 #include <cctype>
 #include <cerrno>
@@ -192,43 +193,6 @@ inline std::string xml2json_element_name(rapidxml::xml_node<> *xmlnode, const xm
     return std::string(xmlnode->name());
 }
 
-inline void xml2json_to_array_form(const char *name, rapidjson::Value &jsvalue, rapidjson::Value &jsvalue_chd, rapidjson::Document::AllocatorType& allocator)
-{
-    rapidjson::Value jn;             // this is a must, partially because of the latest version of rapidjson
-    jn.SetString(name, allocator);
-
-    rapidjson::Value::MemberIterator existing = jsvalue.FindMember(name);
-    if (existing == jsvalue.MemberEnd())
-    {
-        // first occurrence of this name (only reachable with xml2json_always_array):
-        // start a fresh array instead of dereferencing a missing member.
-        rapidjson::Value jsvalue_array;
-        jsvalue_array.SetArray();
-        jsvalue_array.PushBack(jsvalue_chd, allocator);
-        jsvalue.AddMember(jn, jsvalue_array, allocator);
-        return;
-    }
-
-    rapidjson::Value jsvalue_target; // target to do some operation
-    jsvalue_target = existing->value;
-    if(jsvalue_target.IsArray())
-    {
-        jsvalue_target.PushBack(jsvalue_chd, allocator);
-        jsvalue.RemoveMember(name);
-        jsvalue.AddMember(jn, jsvalue_target, allocator);
-    }
-    else
-    {
-        rapidjson::Value jsvalue_array;
-        //jsvalue_array = jsvalue_target;
-        jsvalue_array.SetArray();
-        jsvalue_array.PushBack(jsvalue_target, allocator);
-        jsvalue_array.PushBack(jsvalue_chd, allocator);
-        jsvalue.RemoveMember(name);
-        jsvalue.AddMember(jn, jsvalue_array, allocator);
-    }
-}
-
 inline void xml2json_add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator, const xml2json_options &options)
 {
     rapidxml::xml_attribute<> *myattr;
@@ -244,10 +208,7 @@ inline void xml2json_add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Va
 inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator, const xml2json_options &options)
 {
     //cout << "this: " << xmlnode->type() << " name: " << xmlnode->name() << " value: " << xmlnode->value() << endl;
-    rapidjson::Value jsvalue_chd;
-
     jsvalue.SetObject();
-    jsvalue_chd.SetObject();
     rapidxml::xml_node<> *xmlnode_chd;
 
     // classified discussion:
@@ -294,26 +255,37 @@ inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Val
         if(xmlnode->first_node())
         {
             // case: complex else...
-            std::map<std::string, int> name_count;
+            //
+            // Collect the children first and emit them at the end.  The old
+            // streaming implementation called FindMember() + RemoveMember() +
+            // AddMember() for every repeated child, which is quadratic when a
+            // document has many distinct names.  RapidJSON's RemoveMember()
+            // moves the *last* member into the hole and AddMember() appends, so
+            // `slots` mirrors that order in O(1) per child.
+            struct Child
+            {
+                std::string name;
+                rapidjson::Value value;
+            };
+
+            std::vector<Child> children;                          // child index -> child
+            std::unordered_map<std::string, std::size_t> slot_of; // name -> position in slots
+            std::vector<std::size_t> slots;                       // position -> child index
             std::vector<std::string> child_order;
             bool duplicate_names = false;
 
             for(xmlnode_chd = xmlnode->first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
             {
                 std::string current_name;
-                const char *name_ptr = NULL;
-                rapidjson::Value jn, jv;
                 bool is_element = false;
 
                 if(xmlnode_chd->type() == rapidxml::node_data || xmlnode_chd->type() == rapidxml::node_cdata)
                 {
                     current_name = xml2json_text_additional_name;
-                    name_ptr = xml2json_text_additional_name;
                 }
                 else if(xmlnode_chd->type() == rapidxml::node_element)
                 {
                     current_name = xml2json_element_name(xmlnode_chd, options);
-                    name_ptr = current_name.c_str();
                     is_element = true;
                 }
                 else
@@ -321,20 +293,68 @@ inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Val
                     continue; // ignore anything else (comments, PIs, ...); defensive, not produced by parse<0>
                 }
 
-                if(++name_count[current_name] > 1)
-                    duplicate_names = true;
                 if(options.order)
                     child_order.push_back(current_name);
 
-                xml2json_traverse_node(xmlnode_chd, jsvalue_chd, allocator, options);
+                rapidjson::Value child_value;
+                xml2json_traverse_node(xmlnode_chd, child_value, allocator, options);
 
-                if(name_ptr && ((options.array && is_element) || name_count[current_name] > 1))
-                    xml2json_to_array_form(name_ptr, jsvalue, jsvalue_chd, allocator);
+                std::unordered_map<std::string, std::size_t>::iterator existing = slot_of.find(current_name);
+                if(existing == slot_of.end())
+                {
+                    if(options.array && is_element)
+                    {
+                        rapidjson::Value array_value;
+                        array_value.SetArray();
+                        array_value.PushBack(child_value, allocator);
+                        child_value = array_value;
+                    }
+                    const std::size_t child_idx = children.size();
+                    slot_of.insert(std::make_pair(current_name, slots.size()));
+                    slots.push_back(child_idx);
+                    Child child;
+                    child.name = std::move(current_name);
+                    child.value = std::move(child_value);
+                    children.push_back(std::move(child));
+                }
                 else
                 {
-                    jn.SetString(name_ptr, allocator);
-                    jsvalue.AddMember(jn, jsvalue_chd, allocator);
+                    duplicate_names = true;
+                    const std::size_t slot = existing->second;
+                    const std::size_t child_idx = slots[slot];
+                    Child &child = children[child_idx];
+                    if(child.value.IsArray())
+                    {
+                        child.value.PushBack(child_value, allocator);
+                    }
+                    else
+                    {
+                        rapidjson::Value array_value;
+                        array_value.SetArray();
+                        array_value.PushBack(child.value, allocator);
+                        array_value.PushBack(child_value, allocator);
+                        child.value = array_value;
+                    }
+
+                    // Mirror RemoveMember(): the last slot moves into the hole.
+                    const std::size_t last = slots.size() - 1;
+                    if(slot != last)
+                    {
+                        const std::size_t moved_child = slots[last];
+                        slots[slot] = moved_child;
+                        slot_of[children[moved_child].name] = slot;
+                        slots[last] = child_idx;
+                        slot_of[current_name] = last;
+                    }
                 }
+            }
+
+            for(std::vector<std::size_t>::const_iterator it = slots.begin(); it != slots.end(); ++it)
+            {
+                Child &child = children[*it];
+                rapidjson::Value jn;
+                jn.SetString(child.name.c_str(), static_cast<rapidjson::SizeType>(child.name.size()), allocator);
+                jsvalue.AddMember(jn, child.value, allocator);
             }
 
             if(options.order && duplicate_names)
