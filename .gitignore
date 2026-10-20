@@ -11,3 +11,14 @@
 *.lai
 *.la
 *.a
+
+# Precompiled headers
+*.gch
+
+# Compiled executables (Makefile and CMake builds)
+/xml2json
+/xml2json.exe
+/test.exe
+/test/test
+/test/test.exe
+/build/
