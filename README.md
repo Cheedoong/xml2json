@@ -112,6 +112,7 @@ rapidjson::Document xml2json_document(const char *xml_str,
 // JSON -> XML
 std::string         json2xml(const char *json_str);
 std::string         json2xml(const char *json_str, int indent);
+std::string         json2xml(const char *json_str, const xml2json_options &options);
 ```
 
 ### Options
@@ -125,6 +126,10 @@ struct xml2json_options
     bool array;                  // always emit child elements as JSON arrays
     bool qualify_element_names;  // emit "prefix:local" element names instead of "local"
 
+    std::string text_name;        // member name of an element's own text (default "#text")
+    std::string attribute_prefix; // prefix prepended to attribute names (default "@"; may be empty)
+    std::string order_name;       // member name of the order array (default "#order")
+
     xml2json_options();          // takes its defaults from the configuration block below
 };
 ```
@@ -132,8 +137,10 @@ struct xml2json_options
 The default constructor reproduces the historical behaviour, so existing code
 keeps working.  The defaults come from a compile-time configuration block at the
 top of `xml2json.hpp` (`xml2json_numeric_support`, `xml2json_keep_element_order`,
-`xml2json_always_array`, `xml2json_qualify_element_names`, all `false`), which can
-be adjusted there or overridden per call:
+`xml2json_always_array`, `xml2json_qualify_element_names`, all `false`, plus
+`xml2json_text_additional_name`, `xml2json_attribute_name_prefix` and
+`xml2json_order_additional_name`), which can be adjusted there or overridden per
+call:
 
 ```cpp
 xml2json_options options;
@@ -153,6 +160,24 @@ std::cout << xml2json(xml, options);
 * `qualify_element_names` restores the namespace prefix of element names
   (`<ns:e>` normally yields `"e"`, with this option `"ns:e"`).  Attribute names
   always keep their prefix.
+* `text_name`, `attribute_prefix` and `order_name` change the three JSON key
+  names that used to be compile-time constants only.  Their defaults are exactly
+  those constants, so the output does not change unless you set them.  This is
+  what a node/xml2js style consumer needs:
+
+  ```cpp
+  xml2json_options options;
+  options.text_name        = "_";
+  options.attribute_prefix = "$";
+
+  xml2json("<a id=\"1\">x</a>", options);
+  // {"a":{"_":"x","$id":"1"}}
+  ```
+
+* `attribute_prefix` may be empty, in which case attribute names are emitted
+  without any prefix.  They can then collide with child elements of the same
+  name, so only use it when the schema makes that unambiguous.  `text_name` must
+  not be empty; an empty `order_name` suppresses the `#order` array entirely.
 
 ### Errors
 
@@ -162,13 +187,26 @@ std::cout << xml2json(xml, options);
 
 ### json2xml
 
-`json2xml()` implements the inverse of the rules above: `@name` members become
-attributes, `#text` becomes the text content, other members become child
-elements, arrays repeat the element, and the `#order` member is ignored.  A
-`null` value becomes a self-closing element:
+`json2xml()` implements the inverse of the rules above: members prefixed with
+`attribute_prefix` (by default `@`) become attributes, the `text_name` member (by
+default `#text`) becomes the text content, other members become child elements,
+arrays repeat the element, and the `order_name` member (by default `#order`) is
+ignored.  A `null` value becomes a self-closing element:
 
 ```cpp
 json2xml("{\"a\":{\"@id\":\"9\",\"b\":[1,2]}}");  // <a id="9"><b>1</b><b>2</b></a>
+```
+
+The `json2xml(json, options)` overload applies the same `text_name`,
+`attribute_prefix` and `order_name` as `xml2json`, so a customised conversion
+stays symmetric.  When `attribute_prefix` is empty there is no way to tell an
+attribute from a child element, so every member is written as a child element
+rather than being dropped:
+
+```cpp
+xml2json_options options;
+options.attribute_prefix = "";           // no attribute prefix
+json2xml("{\"a\":{\"id\":\"9\"}}", options);  // <a><id>9</id></a>
 ```
 
 Text and attribute values are escaped, and numbers keep their exact
