@@ -78,12 +78,27 @@ struct xml2json_options
     bool array;                  //!< always emit child elements as JSON arrays
     bool qualify_element_names;  //!< emit element names as "prefix:local" instead of just "local"
 
+    //! JSON member name used for an element's own text (default "#text").
+    //! It must not be empty.
+    std::string text_name;
+    //! Prefix prepended to attribute names (default "@").  It may be empty,
+    //! in which case attributes are written without any prefix; note that they
+    //! can then collide with child element names of the same spelling.
+    std::string attribute_prefix;
+    //! JSON member name used for the sibling order array (default "#order").
+    //! Only emitted when the `order' option is on.  An empty name means
+    //! "do not emit the order array".
+    std::string order_name;
+
     xml2json_options()
         : indent(0)
         , numeric(xml2json_numeric_support)
         , order(xml2json_keep_element_order)
         , array(xml2json_always_array)
         , qualify_element_names(xml2json_qualify_element_names)
+        , text_name(xml2json_text_additional_name)
+        , attribute_prefix(xml2json_attribute_name_prefix)
+        , order_name(xml2json_order_additional_name)
     {}
 };
 
@@ -214,7 +229,7 @@ inline void xml2json_add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Va
     for(myattr = xmlnode->first_attribute(); myattr; myattr = myattr->next_attribute())
     {
         rapidjson::Value jn, jv;
-        jn.SetString((std::string(xml2json_attribute_name_prefix) + myattr->name()).c_str(), allocator);
+        jn.SetString((options.attribute_prefix + myattr->name()).c_str(), allocator);
         xml2json_set_text(jv, myattr->value(), allocator, options.numeric);
         jsvalue.AddMember(jn, jv, allocator);
     }
@@ -243,7 +258,7 @@ inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Val
             {
                 // case: <e attr="xxx">text</e>
                 rapidjson::Value jn, jv;
-                jn.SetString(xml2json_text_additional_name, allocator);
+                jn.SetString(options.text_name.c_str(), allocator);
                 xml2json_set_text(jv, xmlnode->first_node()->value(), allocator, options.numeric);
                 jsvalue.AddMember(jn, jv, allocator);
                 xml2json_add_attributes(xmlnode, jsvalue, allocator, options);
@@ -286,8 +301,8 @@ inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Val
 
                 if(xmlnode_chd->type() == rapidxml::node_data || xmlnode_chd->type() == rapidxml::node_cdata)
                 {
-                    current_name = xml2json_text_additional_name;
-                    name_ptr = xml2json_text_additional_name;
+                    current_name = options.text_name;
+                    name_ptr = current_name.c_str();
                 }
                 else if(xmlnode_chd->type() == rapidxml::node_element)
                 {
@@ -316,10 +331,10 @@ inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Val
                 }
             }
 
-            if(options.order && duplicate_names)
+            if(options.order && duplicate_names && options.order_name.empty() == false)
             {
                 rapidjson::Value jn, jorder;
-                jn.SetString(xml2json_order_additional_name, allocator);
+                jn.SetString(options.order_name.c_str(), allocator);
                 jorder.SetArray();
                 for(std::vector<std::string>::const_iterator it = child_order.begin(); it != child_order.end(); ++it)
                 {
