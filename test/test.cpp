@@ -184,6 +184,16 @@ int main(int argc, char *argv[])
         check_equal(xml2json("<r><i>123456789012345678</i></r>", numeric), "{\"r\":{\"i\":123456789012345678}}", "64-bit integer is not truncated");
         check_equal(xml2json("<r><i/></r>", numeric), "{\"r\":{\"i\":null}}", "empty element is not a number");
         check_equal(xml2json("<r x=\"99921-58-10-7\"/>", numeric), "{\"r\":{\"@x\":\"99921-58-10-7\"}}", "attributes use the same rule");
+
+        // A literal that does not fit into a double used to become +inf; the
+        // RapidJSON writer rejects infinity, which left the JSON truncated.
+        const std::string huge(400, '9');
+        check_equal(xml2json(("<r><i>" + huge + "</i></r>").c_str(), numeric),
+                    "{\"r\":{\"i\":\"" + huge + "\"}}",
+                    "integer beyond double range stays a string");
+        check_equal(xml2json(("<r><i>" + huge + ".0</i></r>").c_str(), numeric),
+                    "{\"r\":{\"i\":\"" + huge + ".0\"}}",
+                    "decimal beyond double range stays a string");
     }
 
     std::cout << "\n=== issue #19: xml2json_document() ===\n";
@@ -233,6 +243,13 @@ int main(int argc, char *argv[])
     check_equal(json2xml("{\"a\":{\"#text\":\"a<b&c\"}}"), "<a>a&lt;b&amp;c</a>", "text is escaped");
     check_equal(json2xml("{\"a\":{\"@x\":\"&\\\"\"}}"), "<a x=\"&amp;&quot;\"/>", "attributes are escaped");
     check_equal(json2xml("{\"a\":{\"n\":42,\"d\":1.5}}"), "<a><n>42</n><d>1.5</d></a>", "numbers keep their form");
+    check_equal(json2xml("{\"a\":{\"n\":1e5,\"d\":1.2300}}"), "<a><n>100000.0</n><d>1.23</d></a>", "numbers use the shortest round-trip form");
+    check_equal(json2xml("{\"a\":{\"i\":123456789012345678}}"), "<a><i>123456789012345678</i></a>", "64-bit integers stay exact");
+    check_equal(json2xml("{\"a\":{\"@x\":[1,2]}}"), "<a x=\"12\"/>", "array attribute values are concatenated");
+    check_equal(json2xml("{\"a\":{\"#text\":[\"x\",\"y\"]}}"), "<a>xy</a>", "#text arrays are concatenated");
+    check_equal(json2xml("[1,2]"), "<root>1</root><root>2</root>", "top-level arrays are wrapped in root");
+    check_equal(json2xml("42"), "<root>42</root>", "top-level scalars are wrapped in root");
+    check_equal(json2xml("{\"a\":{\"#order\":[\"b\"],\"b\":\"1\"}}"), "<a><b>1</b></a>", "#order is ignored");
     {
         bool threw = false;
         try
@@ -251,6 +268,80 @@ int main(int argc, char *argv[])
         const char *xml = "<a><b>1</b><c>2</c><b>3</b></a>";
         const std::string first = xml2json(xml);
         check_equal(xml2json(json2xml(first.c_str()).c_str()), first, "json2xml is the inverse of xml2json");
+    }
+
+    std::cout << "\n=== configurable key names ===\n";
+    {
+        xml2json_options text;
+        text.text_name = "_";
+        check_equal(xml2json("<a id=\"1\">x</a>", text), "{\"a\":{\"_\":\"x\",\"@id\":\"1\"}}",
+                    "text_name renames the text member");
+
+        xml2json_options attr;
+        attr.attribute_prefix = "$";
+        check_equal(xml2json("<a id=\"1\">x</a>", attr), "{\"a\":{\"#text\":\"x\",\"$id\":\"1\"}}",
+                    "attribute_prefix renames the attribute member");
+
+        xml2json_options multi;
+        multi.attribute_prefix = "attr-";
+        check_equal(xml2json("<a id=\"1\"/>", multi), "{\"a\":{\"attr-id\":\"1\"}}",
+                    "a multi-character prefix is matched as a whole");
+
+        xml2json_options bare;
+        bare.attribute_prefix = "";
+        check_equal(xml2json("<a id=\"1\"><b>2</b></a>", bare), "{\"a\":{\"id\":\"1\",\"b\":\"2\"}}",
+                    "an empty prefix emits bare attribute names");
+
+        xml2json_options order;
+        order.order = true;
+        order.order_name = "#seq";
+        check_equal(xml2json("<a><b>1</b><c>2</c><b>3</b></a>", order),
+                    "{\"a\":{\"c\":\"2\",\"b\":[\"1\",\"3\"],\"#seq\":[\"b\",\"c\",\"b\"]}}",
+                    "order_name renames the order member");
+
+        xml2json_options no_order;
+        no_order.order = true;
+        no_order.order_name = "";
+        check_equal(xml2json("<a><b>1</b><c>2</c><b>3</b></a>", no_order),
+                    "{\"a\":{\"c\":\"2\",\"b\":[\"1\",\"3\"]}}",
+                    "an empty order_name suppresses the order member");
+    }
+
+    std::cout << "\n=== configurable key names: json2xml ===\n";
+    {
+        xml2json_options custom;
+        custom.text_name = "_";
+        custom.attribute_prefix = "$";
+        check_equal(json2xml("{\"a\":{\"_\":\"x\",\"$id\":\"1\"}}", custom), "<a id=\"1\">x</a>",
+                    "json2xml honours text_name and attribute_prefix");
+
+        xml2json_options multi;
+        multi.attribute_prefix = "attr-";
+        check_equal(json2xml("{\"a\":{\"attr-id\":\"1\"}}", multi), "<a id=\"1\"/>",
+                    "json2xml strips a multi-character prefix as a whole");
+
+        xml2json_options bare;
+        bare.attribute_prefix = "";
+        check_equal(json2xml("{\"a\":{\"id\":\"1\",\"b\":\"2\"}}", bare), "<a><id>1</id><b>2</b></a>",
+                    "with an empty prefix every member is a child element");
+
+        xml2json_options order;
+        order.order_name = "#seq";
+        check_equal(json2xml("{\"a\":{\"b\":\"1\",\"#seq\":[\"b\"]}}", order), "<a><b>1</b></a>",
+                    "a custom order_name is not written as content");
+
+        xml2json_options defaults;
+        const char *json = "{\"a\":{\"@id\":\"1\",\"b\":[\"1\",\"2\"]}}";
+        check_equal(json2xml(json, defaults), json2xml(json),
+                    "default options match the plain json2xml overload");
+    }
+
+    std::cout << "\n=== default options are unchanged ===\n";
+    {
+        xml2json_options defaults;
+        const char *xml = "<a id=\"1\"><b>1</b><b>2</b></a>";
+        check_equal(xml2json(xml, defaults), xml2json(xml),
+                    "default options match the plain xml2json overload");
     }
 
     std::cout << "\n=== issue #23: header usable from a second translation unit ===\n";

@@ -15,6 +15,7 @@ project(xml2json
         LANGUAGES CXX)
 
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -78,4 +79,19 @@ install(DIRECTORY include/rapidjson include/rapidxml
 install(EXPORT xml2jsonTargets
         FILE xml2jsonTargets.cmake
         NAMESPACE xml2json::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/xml2json)
+
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/xml2jsonConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/xml2jsonConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/xml2json)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/xml2jsonConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion)
+
+install(FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/xml2jsonConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/xml2jsonConfigVersion.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/xml2json)
