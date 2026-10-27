@@ -747,6 +747,8 @@ public:
         case kArrayType: {
                 SizeType count = rhs.data_.a.size;
                 GenericValue* le = reinterpret_cast<GenericValue*>(allocator.Malloc(count * sizeof(GenericValue)));
+                if (!le)
+                    count = 0; // allocation failed: copy as empty array
                 const GenericValue<Encoding,SourceAllocator>* re = rhs.GetElementsPointer();
                 for (SizeType i = 0; i < count; i++)
                     new (&le[i]) GenericValue(re[i], allocator, copyConstStrings);
@@ -1694,8 +1696,11 @@ public:
     GenericValue& Reserve(SizeType newCapacity, Allocator &allocator) {
         RAPIDJSON_ASSERT(IsArray());
         if (newCapacity > data_.a.capacity) {
-            SetElementsPointer(reinterpret_cast<GenericValue*>(allocator.Realloc(GetElementsPointer(), data_.a.capacity * sizeof(GenericValue), newCapacity * sizeof(GenericValue))));
-            data_.a.capacity = newCapacity;
+            GenericValue* e = reinterpret_cast<GenericValue*>(allocator.Realloc(GetElementsPointer(), data_.a.capacity * sizeof(GenericValue), newCapacity * sizeof(GenericValue)));
+            if (e) { // allocation failed: keep the old storage and capacity
+                SetElementsPointer(e);
+                data_.a.capacity = newCapacity;
+            }
         }
         return *this;
     }
@@ -1714,6 +1719,8 @@ public:
         RAPIDJSON_ASSERT(IsArray());
         if (data_.a.size >= data_.a.capacity)
             Reserve(data_.a.capacity == 0 ? kDefaultArrayCapacity : (data_.a.capacity + (data_.a.capacity + 1) / 2), allocator);
+        if (data_.a.size >= data_.a.capacity)
+            return *this; // allocation failed: value is dropped
         GetElementsPointer()[data_.a.size++].RawAssign(value);
         return *this;
     }
@@ -2273,8 +2280,10 @@ private:
         ObjectData& o = data_.o;
         if (newCapacity > o.capacity) {
             Member* newMembers = Realloc<Member>(allocator, GetMembersPointer(), o.capacity, newCapacity);
-            RAPIDJSON_SETPOINTER(Member, o.members, newMembers);
-            o.capacity = newCapacity;
+            if (newMembers) { // allocation failed: keep the old storage and capacity
+                RAPIDJSON_SETPOINTER(Member, o.members, newMembers);
+                o.capacity = newCapacity;
+            }
         }
     }
 
@@ -2305,6 +2314,8 @@ private:
         ObjectData& o = data_.o;
         if (o.size >= o.capacity)
             DoReserveMembers(o.capacity ? (o.capacity + (o.capacity + 1) / 2) : kDefaultObjectCapacity, allocator);
+        if (o.size >= o.capacity)
+            return; // allocation failed: member is dropped
         Member* members = GetMembersPointer();
         Member* m = members + o.size;
         m->name.RawAssign(name);
@@ -2403,8 +2414,11 @@ private:
         data_.f.flags = kArrayFlag;
         if (count) {
             GenericValue* e = static_cast<GenericValue*>(allocator.Malloc(count * sizeof(GenericValue)));
+            if (!e)
+                count = 0; // allocation failed: empty array
+            else
+                std::memcpy(static_cast<void*>(e), values, count * sizeof(GenericValue));
             SetElementsPointer(e);
-            std::memcpy(static_cast<void*>(e), values, count * sizeof(GenericValue));
         }
         else
             SetElementsPointer(0);
@@ -2414,8 +2428,10 @@ private:
     //! Initialize this value as object with initial data, without calling destructor.
     void SetObjectRaw(Member* members, SizeType count, Allocator& allocator) {
         data_.f.flags = kObjectFlag;
+        Member* m = count ? DoAllocMembers(count, allocator) : 0;
+        if (!m)
+            count = 0; // allocation failed (or empty): empty object
         if (count) {
-            Member* m = DoAllocMembers(count, allocator);
             SetMembersPointer(m);
             std::memcpy(static_cast<void*>(m), members, count * sizeof(Member));
 #if RAPIDJSON_USE_MEMBERSMAP
@@ -2447,9 +2463,15 @@ private:
             str = data_.ss.str;
             std::memmove(str, s, s.length * sizeof(Ch));
         } else {
+            str = static_cast<Ch *>(allocator.Malloc((s.length + 1) * sizeof(Ch)));
+            if (!str) { // allocation failed: empty string
+                data_.f.flags = kShortStringFlag;
+                data_.ss.SetLength(0);
+                data_.ss.str[0] = '\0';
+                return;
+            }
             data_.f.flags = kCopyStringFlag;
             data_.s.length = s.length;
-            str = static_cast<Ch *>(allocator.Malloc((s.length + 1) * sizeof(Ch)));
             SetStringPointer(str);
             std::memcpy(str, s, s.length * sizeof(Ch));
         }
@@ -2818,31 +2840,42 @@ private:
 
 public:
     // Implementation of Handler
-    bool Null() { new (stack_.template Push<ValueType>()) ValueType(); return true; }
-    bool Bool(bool b) { new (stack_.template Push<ValueType>()) ValueType(b); return true; }
-    bool Int(int i) { new (stack_.template Push<ValueType>()) ValueType(i); return true; }
-    bool Uint(unsigned i) { new (stack_.template Push<ValueType>()) ValueType(i); return true; }
-    bool Int64(int64_t i) { new (stack_.template Push<ValueType>()) ValueType(i); return true; }
-    bool Uint64(uint64_t i) { new (stack_.template Push<ValueType>()) ValueType(i); return true; }
-    bool Double(double d) { new (stack_.template Push<ValueType>()) ValueType(d); return true; }
+    // Allocation-failure aware stack slot for the SAX handlers. NULL when the
+    // stack cannot grow; the handler then returns false, which stops the parse
+    // with kParseErrorTermination instead of writing through NULL.
+    ValueType* PushSlot() { return stack_.template TryPush<ValueType>(); }
+
+    bool Null() { ValueType* v = PushSlot(); if (!v) return false; new (v) ValueType(); return true; }
+    bool Bool(bool b) { ValueType* v = PushSlot(); if (!v) return false; new (v) ValueType(b); return true; }
+    bool Int(int i) { ValueType* v = PushSlot(); if (!v) return false; new (v) ValueType(i); return true; }
+    bool Uint(unsigned i) { ValueType* v = PushSlot(); if (!v) return false; new (v) ValueType(i); return true; }
+    bool Int64(int64_t i) { ValueType* v = PushSlot(); if (!v) return false; new (v) ValueType(i); return true; }
+    bool Uint64(uint64_t i) { ValueType* v = PushSlot(); if (!v) return false; new (v) ValueType(i); return true; }
+    bool Double(double d) { ValueType* v = PushSlot(); if (!v) return false; new (v) ValueType(d); return true; }
 
     bool RawNumber(const Ch* str, SizeType length, bool copy) { 
+        ValueType* v = PushSlot();
+        if (!v)
+            return false;
         if (copy) 
-            new (stack_.template Push<ValueType>()) ValueType(str, length, GetAllocator());
+            new (v) ValueType(str, length, GetAllocator());
         else
-            new (stack_.template Push<ValueType>()) ValueType(str, length);
+            new (v) ValueType(str, length);
         return true;
     }
 
     bool String(const Ch* str, SizeType length, bool copy) { 
+        ValueType* v = PushSlot();
+        if (!v)
+            return false;
         if (copy) 
-            new (stack_.template Push<ValueType>()) ValueType(str, length, GetAllocator());
+            new (v) ValueType(str, length, GetAllocator());
         else
-            new (stack_.template Push<ValueType>()) ValueType(str, length);
+            new (v) ValueType(str, length);
         return true;
     }
 
-    bool StartObject() { new (stack_.template Push<ValueType>()) ValueType(kObjectType); return true; }
+    bool StartObject() { ValueType* v = PushSlot(); if (!v) return false; new (v) ValueType(kObjectType); return true; }
     
     bool Key(const Ch* str, SizeType length, bool copy) { return String(str, length, copy); }
 
@@ -2852,7 +2885,7 @@ public:
         return true;
     }
 
-    bool StartArray() { new (stack_.template Push<ValueType>()) ValueType(kArrayType); return true; }
+    bool StartArray() { ValueType* v = PushSlot(); if (!v) return false; new (v) ValueType(kArrayType); return true; }
     
     bool EndArray(SizeType elementCount) {
         ValueType* elements = stack_.template Pop<ValueType>(elementCount);

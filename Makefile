@@ -30,6 +30,7 @@ endif
 
 EXEC := xml2json$(EXEEXT)
 TEST := test$(EXEEXT)
+OOM_TEST := test_oom$(EXEEXT)
 
 PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
@@ -51,8 +52,12 @@ $(EXEC): xml2json.o
 $(TEST): test/test.cpp test/test_link.cpp include/xml2json.hpp
 	$(CXX) $(CXXFLAGS) $(WARNINGS) $(INCLUDE) $^ $(LDFLAGS) -o $@
 
-test: $(TEST)
+$(OOM_TEST): test/test_oom.cpp include/rapidjson/document.h include/rapidjson/reader.h include/rapidjson/internal/stack.h
+	$(CXX) $(CXXFLAGS) $(WARNINGS) $(INCLUDE) $^ $(LDFLAGS) -o $@
+
+test: $(TEST) $(OOM_TEST)
 	$(RUN)$(TEST)
+	$(RUN)$(OOM_TEST)
 
 install: $(EXEC)
 	$(INSTALL) -d "$(DESTDIR)$(BINDIR)"
@@ -62,6 +67,6 @@ uninstall:
 	$(RM) "$(DESTDIR)$(BINDIR)/$(EXEC)"
 
 clean:
-	-$(RM) xml2json.o $(EXEC) $(TEST)
+	-$(RM) xml2json.o $(EXEC) $(TEST) $(OOM_TEST)
 
 .PHONY: all test install uninstall clean

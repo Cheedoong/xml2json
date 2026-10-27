@@ -38,7 +38,7 @@ class Stack {
 public:
     // Optimization note: Do not allocate memory for stack_ in constructor.
     // Do it lazily when first Push() -> Expand() -> Resize().
-    Stack(Allocator* allocator, size_t stackCapacity) : allocator_(allocator), ownAllocator_(0), stack_(0), stackTop_(0), stackEnd_(0), initialCapacity_(stackCapacity) {
+    Stack(Allocator* allocator, size_t stackCapacity) : allocator_(allocator), ownAllocator_(0), stack_(0), stackTop_(0), stackEnd_(0), initialCapacity_(stackCapacity), overflowed_(false), sink_() {
     }
 
 #if RAPIDJSON_HAS_CXX11_RVALUE_REFS
@@ -48,7 +48,9 @@ public:
           stack_(rhs.stack_),
           stackTop_(rhs.stackTop_),
           stackEnd_(rhs.stackEnd_),
-          initialCapacity_(rhs.initialCapacity_)
+          initialCapacity_(rhs.initialCapacity_),
+          overflowed_(rhs.overflowed_),
+          sink_()
     {
         rhs.allocator_ = 0;
         rhs.ownAllocator_ = 0;
@@ -75,6 +77,7 @@ public:
             stackTop_ = rhs.stackTop_;
             stackEnd_ = rhs.stackEnd_;
             initialCapacity_ = rhs.initialCapacity_;
+            overflowed_ = rhs.overflowed_;
 
             rhs.allocator_ = 0;
             rhs.ownAllocator_ = 0;
@@ -94,9 +97,10 @@ public:
         internal::Swap(stackTop_, rhs.stackTop_);
         internal::Swap(stackEnd_, rhs.stackEnd_);
         internal::Swap(initialCapacity_, rhs.initialCapacity_);
+        internal::Swap(overflowed_, rhs.overflowed_);
     }
 
-    void Clear() { stackTop_ = stack_; }
+    void Clear() { stackTop_ = stack_; overflowed_ = false; }
 
     void ShrinkToFit() { 
         if (Empty()) {
@@ -113,17 +117,39 @@ public:
     // Optimization note: try to minimize the size of this function for force inline.
     // Expansion is run very infrequently, so it is moved to another (probably non-inline) function.
     template<typename T>
-    RAPIDJSON_FORCEINLINE void Reserve(size_t count = 1) {
+    RAPIDJSON_FORCEINLINE bool Reserve(size_t count = 1) {
          // Expand the stack if needed
         if (RAPIDJSON_UNLIKELY(static_cast<std::ptrdiff_t>(sizeof(T) * count) > (stackEnd_ - stackTop_)))
             Expand<T>(count);
+        return static_cast<std::ptrdiff_t>(sizeof(T) * count) <= (stackEnd_ - stackTop_);
     }
 
+    //! Push, or return NULL when the stack cannot grow (allocation failed).
     template<typename T>
-    RAPIDJSON_FORCEINLINE T* Push(size_t count = 1) {
-        Reserve<T>(count);
+    RAPIDJSON_FORCEINLINE T* TryPush(size_t count = 1) {
+        if (!Reserve<T>(count)) {
+            overflowed_ = true;
+            return 0;
+        }
         return PushUnsafe<T>(count);
     }
+
+    //! Push for callers without a failure path (the reader's character
+    //! buffer). When the stack cannot grow, writes go to a small sink and the
+    //! stack is marked overflowed; the caller must check Overflowed() before
+    //! using the buffered data.
+    template<typename T>
+    RAPIDJSON_FORCEINLINE T* Push(size_t count = 1) {
+        if (RAPIDJSON_UNLIKELY(!Reserve<T>(count))) {
+            overflowed_ = true;
+            RAPIDJSON_ASSERT(sizeof(T) * count <= sizeof(sink_));
+            return reinterpret_cast<T*>(&sink_);
+        }
+        return PushUnsafe<T>(count);
+    }
+
+    //! True if a push could not be served since the last Clear().
+    bool Overflowed() const { return overflowed_; }
 
     template<typename T>
     RAPIDJSON_FORCEINLINE T* PushUnsafe(size_t count = 1) {
@@ -200,7 +226,10 @@ private:
 
     void Resize(size_t newCapacity) {
         const size_t size = GetSize();  // Backup the current size
-        stack_ = static_cast<char*>(allocator_->Realloc(stack_, GetCapacity(), newCapacity));
+        char* newStack = static_cast<char*>(allocator_->Realloc(stack_, GetCapacity(), newCapacity));
+        if (!newStack)
+            return; // allocation failed: keep the old stack, Reserve() reports no room
+        stack_ = newStack;
         stackTop_ = stack_ + size;
         stackEnd_ = stack_ + newCapacity;
     }
@@ -220,6 +249,16 @@ private:
     char *stackTop_;
     char *stackEnd_;
     size_t initialCapacity_;
+    bool overflowed_;               //!< A push could not be served.
+    //! Write target for Push() when the stack cannot grow. A union (not
+    //! alignas, RapidJSON supports C++03) so it is aligned for any T pushed,
+    //! e.g. Writer::Level.
+    union Sink {
+        char bytes[64];
+        double d;
+        long long ll;
+        void* p;
+    } sink_;
 };
 
 } // namespace internal
