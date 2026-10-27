@@ -288,7 +288,9 @@ structures.  Arbitrary JSON is not guaranteed to round-trip:
 
 RapidJSON has not published a release since 1.1.0 (2016), so the bundled copy
 tracks upstream `master`; the `VERSION.md` files record the exact commits, CVE
-status and local patches.
+status and local patches.  The bundled RapidJSON also carries the downstream
+OOM/NULL-write fix from `thorsten-klein/rapidjson` commit `824a72ac`; see
+`include/rapidjson/VERSION.md` for the scope and rollback notes.
 
 ## Tests
 

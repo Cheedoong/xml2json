@@ -931,13 +931,21 @@ private:
 
         StackStream(internal::Stack<StackAllocator>& stack) : stack_(stack), length_(0) {}
         RAPIDJSON_FORCEINLINE void Put(Ch c) {
-            *stack_.template Push<Ch>() = c;
+            Ch* p = stack_.template TryPush<Ch>();
+            if (RAPIDJSON_UNLIKELY(!p))
+                return; // allocation failed: Overflowed() is set, char dropped
+            *p = c;
             ++length_;
         }
 
         RAPIDJSON_FORCEINLINE void* Push(SizeType count) {
+            // Callers write count chars into the result, so it must not be
+            // NULL: Stack::Push() falls back to its sink when it cannot grow.
+            void* p = stack_.template TryPush<Ch>(count);
+            if (RAPIDJSON_UNLIKELY(!p))
+                return stack_.template Push<Ch>(count);
             length_ += count;
-            return stack_.template Push<Ch>(count);
+            return p;
         }
 
         size_t Length() const { return length_; }
@@ -977,6 +985,10 @@ private:
             StackStream<typename TargetEncoding::Ch> stackStream(stack_);
             ParseStringToStream<parseFlags, SourceEncoding, TargetEncoding>(s, stackStream);
             RAPIDJSON_PARSE_ERROR_EARLY_RETURN_VOID;
+            if (RAPIDJSON_UNLIKELY(stack_.Overflowed())) {
+                stackStream.Pop(); // drop what was buffered before the overflow
+                RAPIDJSON_PARSE_ERROR(kParseErrorTermination, s.Tell());
+            }
             SizeType length = static_cast<SizeType>(stackStream.Length()) - 1;
             const typename TargetEncoding::Ch* const str = stackStream.Pop();
             success = (isKey ? handler.Key(str, length, true) : handler.String(str, length, true));
@@ -1702,12 +1714,14 @@ private:
                 dstStream.Put('\0');
                 const typename TargetEncoding::Ch* str = dstStream.Pop();
                 const SizeType length = static_cast<SizeType>(dstStream.Length()) - 1;
-                cont = handler.RawNumber(str, SizeType(length), true);
+                cont = !stack_.Overflowed() && handler.RawNumber(str, SizeType(length), true);
             }
         }
         else {
            size_t length = s.Length();
            const NumberCharacter* decimal = s.Pop();  // Pop stack no matter if it will be used or not.
+           if (RAPIDJSON_UNLIKELY(stack_.Overflowed()))
+               RAPIDJSON_PARSE_ERROR(kParseErrorTermination, startOffset); // number text truncated
 
            if (useDouble) {
                int p = exp + expFrac;

@@ -37,15 +37,20 @@ json2xml input treated as untrusted.
 
 ## Downstream patches
 
-None currently applied.
-
-Candidate, not applied:
+Applied on 2026-10-27:
 
 - `thorsten-klein/rapidjson` commit `824a72ac` — `Handle allocation failure
   instead of writing through NULL`.
-- This is gated by the R2 probe and has not been merged into this tree.
-- If applied, record the patch SHA, the three affected headers, the
-  hunk/API matrix, and the rollback steps here.
+- Source: `thorsten-klein/rapidjson` commit
+  `824a72acca4b3d46bf04a05c7bfef61d077a4eb5`.
+- Files: `include/rapidjson/document.h`, `include/rapidjson/reader.h`,
+  `include/rapidjson/internal/stack.h`.
+- Project tests: `test/test_oom.cpp`, registered as `xml2json.oom` in CTest
+  and as `test_oom` in the top-level Makefile.
+- The patch is gated by the R2 probe; see the project requirements document
+  for the probe table and rollback steps.
+- Normal-path output remains byte-identical to the baseline; the OOM path is
+  the only intended behavior change.
 
 ## Scope
 
@@ -72,9 +77,10 @@ git merge-base --is-ancestor 8269bc2 24b5e7a8
 # upstream commit (run in a temporary upstream clone, or compare hashes)
 ```
 
-Project-level verification: CTest, the 55+ regression checks, C++11/14/17/20
-with `-Wall -Wextra -Werror`, golden output sizes 690 / 77562 / 91260 bytes,
-and the differential suite against `master`.
+Project-level verification: CTest, the 62 regression checks, the
+`xml2json.oom` allocation-failure test, C++11/14/17/20 with
+`-Wall -Wextra -Werror`, golden output sizes 690 / 77562 / 91260 bytes, and
+the differential suite against `master`.
 
 ## Review triggers
 
