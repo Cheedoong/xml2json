@@ -16,7 +16,7 @@ soft-subtitle pipeline at Tencent Video and is still used there.
 * Optional pretty printing, numeric conversion, sibling-order recording,
   always-array output, qualified namespace names and configurable key names.
 * Malformed input is reported as an exception instead of aborting the process.
-* Requires C++11 or later; the test suite is built with GCC 16.2 (MinGW-w64).
+* Requires C++11 or later.
 
 ## Quick start
 
@@ -138,17 +138,17 @@ share a `Document` or an `xml2json_options` object.
 ```cpp
 struct xml2json_options
 {
-    int  indent;                 // spaces per level for pretty printing; <= 0 is compact
-    bool numeric;                // emit numeric looking text as JSON numbers
-    bool order;                  // add a "#order" array where sibling order would be lost
-    bool array;                  // always emit child elements as JSON arrays
-    bool qualify_element_names;  // emit "prefix:local" element names instead of "local"
+    int  indent;                  // spaces per level for pretty printing; <= 0 is compact
+    bool numeric;                 // emit numeric looking text as JSON numbers
+    bool order;                   // add a "#order" array where sibling order would be lost
+    bool array;                   // always emit child elements as JSON arrays
+    bool qualify_element_names;   // emit "prefix:local" element names instead of "local"
 
     std::string text_name;        // member name of an element's own text (default "#text")
     std::string attribute_prefix; // prefix prepended to attribute names (default "@"; may be empty)
     std::string order_name;       // member name of the order array (default "#order")
 
-    xml2json_options();          // takes its defaults from the configuration block below
+    xml2json_options();           // takes its defaults from the configuration block below
 };
 ```
 
@@ -287,8 +287,8 @@ structures.  Arbitrary JSON is not guaranteed to round-trip:
 | [RapidJSON](https://github.com/Tencent/rapidjson) | 1.1.0 plus post-1.1.0 `master` fixes, commit `24b5e7a` (2024-12-22) ([details](include/rapidjson/VERSION.md)) |
 
 RapidJSON has not published a release since 1.1.0 (2016), so the bundled copy
-tracks upstream `master`; the `VERSION.md` files record the exact commits and
-local patches.
+tracks upstream `master`; the `VERSION.md` files record the exact commits, CVE
+status and local patches.
 
 ## Tests
 
@@ -301,13 +301,6 @@ duplicate symbols.
 
 Run it with `make test`, or `ctest --test-dir build` after a CMake build.  Passing
 `--write` regenerates the expected `*.js.txt` files instead of checking them.
-
-## Tested under
-
-The test suite is currently built and run with MinGW-w64 GCC 16.2 on Windows,
-under C++11, C++14, C++17 and C++20 with `-Wall -Wextra -Werror`.  There is no
-CI configuration in the repository, so other platforms are expected to work but
-are not continuously verified here.
 
 ## License
 
