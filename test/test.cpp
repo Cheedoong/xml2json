@@ -14,6 +14,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -289,6 +290,10 @@ int main(int argc, char *argv[])
             {
                 threw = true;
             }
+            catch(const std::exception &e)
+            {
+                std::cout << "unexpected exception: " << e.what() << "\n";
+            }
             check(threw, "huge positive exponent is rejected as invalid JSON");
         }
         {
@@ -301,6 +306,10 @@ int main(int argc, char *argv[])
             catch(const std::runtime_error &)
             {
                 handled = true;
+            }
+            catch(const std::exception &e)
+            {
+                std::cout << "unexpected exception: " << e.what() << "\n";
             }
             check(handled, "long fractional literal is handled without crashing");
         }

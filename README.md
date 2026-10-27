@@ -302,6 +302,10 @@ duplicate symbols.
 Run it with `make test`, or `ctest --test-dir build` after a CMake build.  Passing
 `--write` regenerates the expected `*.js.txt` files instead of checking them.
 
+The suite is currently verified manually on Windows with MinGW-w64 GCC; the
+repository has no CI configuration, so other platforms are expected to work but
+are not continuously verified.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

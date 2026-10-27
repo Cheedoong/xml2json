@@ -11,7 +11,7 @@ Last reviewed: 2026-10-27
 | Baseline commit | `24b5e7a8b27f42fa16b96fc70aade9106cf7102f` |
 | Baseline date | 2024-12-22 |
 | Baseline commit message | `Fix out of bounds read with kParseValidateEncodingFlag` |
-| Verified | `rapidjson.h`, `document.h`, `reader.h` and `writer.h` are blob-identical to upstream `master` (2026-10-27) |
+| Verified | `rapidjson.h`, `document.h`, `reader.h`, `writer.h` and `internal/stack.h` are blob-identical to upstream `master` (2026-10-27) |
 
 Upstream has not tagged a release since `v1.1.0` (2016-08-25), so `master` is
 the newest available code.  Pin the commit above; do **not** use the `v1.1.0`
@@ -68,8 +68,8 @@ Candidate, not applied:
 # CVE fix is an ancestor of the vendored baseline
 git merge-base --is-ancestor 8269bc2 24b5e7a8
 
-# Core files are byte-identical to the pinned upstream commit
-# (run in a temporary upstream clone, or compare hashes)
+# Core files (including internal/stack.h) are byte-identical to the pinned
+# upstream commit (run in a temporary upstream clone, or compare hashes)
 ```
 
 Project-level verification: CTest, the 55+ regression checks, C++11/14/17/20
