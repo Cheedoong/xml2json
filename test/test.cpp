@@ -14,6 +14,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -156,6 +157,18 @@ int main(int argc, char *argv[])
     check_equal(xml2json("<a><b/></a>"), "{\"a\":{\"b\":null}}", "empty element becomes null");
     check_equal(xml2json("<a><b>1</b><b>2</b></a>"), "{\"a\":{\"b\":[\"1\",\"2\"]}}", "repeated children become an array");
     check_equal(xml2json(""), "{}", "empty input yields an empty object");
+    check_equal(xml2json("<a><!--comment--><?pi x?><b>1</b></a>"), "{\"a\":{\"b\":\"1\"}}",
+                "non-element children are skipped");
+    {
+        const char *null_xml = nullptr;
+        check_equal(xml2json(null_xml), "{}", "null XML input yields an empty object");
+        rapidjson::Document doc = xml2json_document(null_xml, xml2json_options());
+        check(doc.IsObject(), "null XML input yields an object document");
+    }
+    {
+        const char *null_json = nullptr;
+        check_equal(json2xml(null_json), "", "null JSON input yields an empty string");
+    }
 
     std::cout << "\n=== issue #16: malformed input throws instead of aborting ===\n";
     {
@@ -261,6 +274,45 @@ int main(int argc, char *argv[])
             threw = true;
         }
         check(threw, "invalid JSON raises std::runtime_error");
+    }
+
+    std::cout << "\n=== CVE-2024-38517 / 39684: extreme exponents ===\n";
+    {
+        check_equal(json2xml("{\"a\":1e-2147483648}"), "<a>0.0</a>",
+                    "extreme negative exponent is clamped without crashing");
+        {
+            bool threw = false;
+            try
+            {
+                json2xml("{\"a\":1e9999999999}");
+            }
+            catch(const std::runtime_error &)
+            {
+                threw = true;
+            }
+            catch(const std::exception &e)
+            {
+                std::cout << "unexpected exception: " << e.what() << "\n";
+            }
+            check(threw, "huge positive exponent is rejected as invalid JSON");
+        }
+        {
+            bool handled = false;
+            try
+            {
+                const std::string xml = json2xml("{\"a\":0.184467440737095516159}");
+                handled = !xml.empty();
+            }
+            catch(const std::runtime_error &)
+            {
+                handled = true;
+            }
+            catch(const std::exception &e)
+            {
+                std::cout << "unexpected exception: " << e.what() << "\n";
+            }
+            check(handled, "long fractional literal is handled without crashing");
+        }
     }
 
     std::cout << "\n=== round trip xml -> json -> xml -> json ===\n";
