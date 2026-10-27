@@ -5,6 +5,10 @@
 // MemoryPoolAllocator with a tiny user buffer for document building.  The
 // baseline (before the patch) aborts or crashes; the patched tree must either
 // report kParseErrorTermination or return a valid, truncated container.
+//
+// test_build_path() drives RapidJSON's builder directly. It approximates the
+// Document operations used by xml2json, but it is not an end-to-end xml2json()
+// test; passing it does not prove that the xml2json build path is hardened.
 
 #include <cstdio>
 #include <cstdlib>
@@ -81,7 +85,7 @@ std::string make_json()
     return json;
 }
 
-void test_parse_budget(int budget)
+void test_parse_budget(int budget, bool expect_termination)
 {
     typedef rapidjson::GenericDocument<rapidjson::UTF8<>, rapidjson::CrtAllocator, FailingAllocator> Document;
     FailingAllocator stack_allocator(budget);
@@ -89,7 +93,7 @@ void test_parse_budget(int budget)
     const std::string json = make_json();
     doc.Parse(json.c_str());
 
-    if (budget < 20)
+    if (expect_termination)
     {
         check(doc.HasParseError() && doc.GetParseError() == rapidjson::kParseErrorTermination,
               "exhausted parse stack returns kParseErrorTermination");
@@ -105,6 +109,9 @@ void test_build_path()
     typedef rapidjson::MemoryPoolAllocator<NullAllocator> Allocator;
     typedef rapidjson::GenericValue<rapidjson::UTF8<>, Allocator> Value;
 
+    // The 1024-byte user buffer serves the first few allocations. Once it is
+    // exhausted, NullAllocator returns NULL, so the allocation-failure path is
+    // actually reached.
     char buffer[1024];
     Allocator allocator(buffer, sizeof(buffer));
 
@@ -131,9 +138,15 @@ void test_build_path()
 int main()
 {
     std::printf("=== RapidJSON OOM regression ===\n");
-    for (int budget = 1; budget <= 10; ++budget)
-        test_parse_budget(budget);
-    test_parse_budget(20);
+
+    // The 500-object JSON needs far fewer than 20 stack growths; 1<<20 is
+    // deliberately ample, while budgets 1..10 force the failure path.
+    const int kSufficientBudget = 1 << 20;
+    const int kExhaustedBudget = 10;
+
+    test_parse_budget(kSufficientBudget, false);
+    for (int budget = 1; budget <= kExhaustedBudget; ++budget)
+        test_parse_budget(budget, true);
     test_build_path();
 
     if (g_failures != 0)

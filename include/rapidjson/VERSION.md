@@ -51,6 +51,20 @@ Applied on 2026-10-27:
   for the probe table and rollback steps.
 - Normal-path output remains byte-identical to the baseline; the OOM path is
   the only intended behavior change.
+- This is an allocation-failure robustness fix, not a CVE fix. Keep it out of
+  the CVE table and out of CVE statistics.
+- Review: self-review by OnlyRicardo; no independent reviewer; recorded as a
+  known risk.
+
+### Rollback
+
+1. Revert the R2 commit (the commit titled
+   `deps: backport RapidJSON allocation-failure handling`, or the PR #28 merge
+   commit).
+2. Restore `document.h`, `reader.h` and `internal/stack.h`.
+3. Remove or disable `test/test_oom.cpp` and the `xml2json.oom` CTest entry.
+4. Mark this downstream section as reverted, retaining the historical record.
+5. Re-run 62/62, golden 690 / 77562 / 91260 and the differential suite.
 
 ## Scope
 
@@ -84,14 +98,20 @@ the differential suite against `master`.
 
 ## Review triggers
 
+Next review: 2027-01-27; owner: OnlyRicardo.
+
 Re-review this file when any of the following happens:
 
 - upstream `master` moves past `24b5e7a8`;
-- `824a72ac` is merged upstream;
+- if `824a72ac` is merged upstream, remove the downstream patch and update the
+  baseline;
+- if upstream closes/rejects `824a72ac`, re-evaluate whether to keep the
+  downstream patch; do not silently drop it;
 - RapidJSON publishes a new tag/release;
 - a new CVE or security advisory appears;
 - the `xml2json` / `json2xml` API or allocator usage changes;
 - the compiler/toolchain changes in a way that affects OOM behavior;
 - the downstream patch no longer applies cleanly;
 - the OOM regression fails in CI;
-- quarterly review.
+- 2027-01-27 or the quarterly review: the owner initiates the review and
+  re-runs the full matrix.
