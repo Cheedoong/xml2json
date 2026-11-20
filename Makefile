@@ -31,6 +31,7 @@ endif
 EXEC := xml2json$(EXEEXT)
 TEST := test$(EXEEXT)
 OOM_TEST := test_oom$(EXEEXT)
+DEEP_TEST := test_deep$(EXEEXT)
 
 PREFIX  ?= /usr/local
 BINDIR  ?= $(PREFIX)/bin
@@ -55,9 +56,16 @@ $(TEST): test/test.cpp test/test_link.cpp include/xml2json.hpp
 $(OOM_TEST): test/test_oom.cpp include/rapidjson/document.h include/rapidjson/reader.h include/rapidjson/internal/stack.h
 	$(CXX) $(CXXFLAGS) $(WARNINGS) $(INCLUDE) $^ $(LDFLAGS) -o $@
 
-test: $(TEST) $(OOM_TEST)
+$(DEEP_TEST): test/test_deep.cpp include/xml2json.hpp
+	$(CXX) $(CXXFLAGS) $(WARNINGS) $(INCLUDE) $^ $(LDFLAGS) -o $@
+
+test: $(TEST) $(OOM_TEST) $(DEEP_TEST)
 	$(RUN)$(TEST)
 	$(RUN)$(OOM_TEST)
+	$(RUN)$(DEEP_TEST)
+
+test_deep: $(DEEP_TEST)
+	$(RUN)$(DEEP_TEST)
 
 install: $(EXEC)
 	$(INSTALL) -d "$(DESTDIR)$(BINDIR)"
@@ -67,6 +75,6 @@ uninstall:
 	$(RM) "$(DESTDIR)$(BINDIR)/$(EXEC)"
 
 clean:
-	-$(RM) xml2json.o $(EXEC) $(TEST) $(OOM_TEST)
+	-$(RM) xml2json.o $(EXEC) $(TEST) $(OOM_TEST) $(DEEP_TEST)
 
-.PHONY: all test install uninstall clean
+.PHONY: all test test_deep install uninstall clean

@@ -263,6 +263,14 @@ int main(int argc, char *argv[])
     check_equal(json2xml("[1,2]"), "<root>1</root><root>2</root>", "top-level arrays are wrapped in root");
     check_equal(json2xml("42"), "<root>42</root>", "top-level scalars are wrapped in root");
     check_equal(json2xml("{\"a\":{\"#order\":[\"b\"],\"b\":\"1\"}}"), "<a><b>1</b></a>", "#order is ignored");
+    check_equal(json2xml("{\"a\":{\"b\":[],\"c\":1}}"), "<a><c>1</c></a>", "an empty child array emits nothing");
+    check_equal(json2xml("{\"a\":{\"#text\":[]}}"), "<a></a>", "an empty #text array keeps the element open");
+    check_equal(json2xml("{\"a\":{\"#text\":{}}}"), "<a></a>", "an object #text keeps the element open");
+    check_equal(json2xml("{\"a\":{\"#text\":null}}"), "<a/>", "a null #text is treated as absent");
+    check_equal(json2xml("{\"a\":{\"#text\":\"first\",\"#text\":\"last\"}}"), "<a>last</a>",
+                "the last duplicate #text member wins");
+    check_equal(json2xml("{\"a\":{\"@id\":\"9\",\"b\":[\"1\",\"2\"]}}", 2),
+                "<a id=\"9\">\n  <b>1</b>\n  <b>2</b>\n</a>", "json2xml indent = 2");
     {
         bool threw = false;
         try
