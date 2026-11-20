@@ -143,6 +143,7 @@ struct xml2json_options
     bool order;                   // add a "#order" array where sibling order would be lost
     bool array;                   // always emit child elements as JSON arrays
     bool qualify_element_names;   // emit "prefix:local" element names instead of "local"
+    std::size_t max_xml_depth;    // reject XML nested deeper than this (default 1024; 0 disables)
 
     std::string text_name;        // member name of an element's own text (default "#text")
     std::string attribute_prefix; // prefix prepended to attribute names (default "@"; may be empty)
@@ -152,14 +153,17 @@ struct xml2json_options
 };
 ```
 
-The default constructor reproduces the historical behaviour, so existing code
-keeps working.  The defaults come from a compile-time configuration block at the
-top of `xml2json.hpp` (`xml2json_numeric_support`, `xml2json_keep_element_order`,
+The default constructor otherwise reproduces the historical behaviour, so
+existing code keeps working.  The defaults come from a compile-time
+configuration block at the top of `xml2json.hpp`
+(`xml2json_numeric_support`, `xml2json_keep_element_order`,
 `xml2json_always_array`, `xml2json_qualify_element_names`, all `false`, plus
-`xml2json_text_additional_name`, `xml2json_attribute_name_prefix` and
-`xml2json_order_additional_name`), which can be adjusted there or overridden per
-call.  With the default options the output is byte-for-byte identical to the
-historical implementation; every new capability is opt-in.
+`xml2json_text_additional_name`, `xml2json_attribute_name_prefix`,
+`xml2json_order_additional_name` and `xml2json_default_max_xml_depth`), which
+can be adjusted there or overridden per call.  With the default options the
+output is byte-for-byte identical to the historical implementation for input
+within the depth limit; apart from the `max_xml_depth` safety guard, every new
+capability is opt-in.
 
 ```cpp
 xml2json_options options;
@@ -182,6 +186,9 @@ std::cout << xml2json(xml, options);
 * `qualify_element_names` restores the namespace prefix of element names
   (`<ns:e>` normally yields `"e"`, with this option `"ns:e"`).  Attribute names
   always keep their prefix.
+* `max_xml_depth` rejects XML whose element nesting is deeper than the given
+  value before RapidXML's recursive parser runs.  The default is 1024; set it to
+  0 to disable the guard (deep input can then overflow the stack).
 * `text_name`, `attribute_prefix` and `order_name` change the three JSON key
   names that used to be compile-time constants only.  Their defaults are exactly
   those constants, so the output does not change unless you set them.  This is
@@ -204,7 +211,8 @@ std::cout << xml2json(xml, options);
 ### Errors
 
 * `xml2json()` and `xml2json_document()` throw `rapidxml::parse_error` when the
-  XML is malformed.
+  XML is malformed, and `std::runtime_error` when the element nesting exceeds
+  `max_xml_depth`.
 * `json2xml()` throws `std::runtime_error`, carrying the offset and message, when
   the JSON is malformed.
 
@@ -222,8 +230,9 @@ json2xml("{\"a\":{\"@id\":\"9\",\"b\":[1,2]}}");  // <a id="9"><b>1</b><b>2</b><
 
 The `json2xml(json, options)` overload applies the same `indent`, `text_name`,
 `attribute_prefix` and `order_name` as `xml2json`, so a customised conversion
-stays symmetric.  The remaining options (`numeric`, `order`, `array` and
-`qualify_element_names`) only affect XML to JSON.  When `attribute_prefix` is
+stays symmetric.  The remaining options (`numeric`, `order`, `array`,
+`qualify_element_names` and `max_xml_depth`) only affect XML to JSON.  When
+`attribute_prefix` is
 empty there is no way to tell an attribute from a child element, so every member
 is written as a child element rather than being dropped:
 
@@ -275,9 +284,14 @@ structures.  Arbitrary JSON is not guaranteed to round-trip:
   values.
 * Duplicate JSON object keys are not detected; each occurrence is written as a
   separate element (or attribute).
-* Both conversions are recursive and have no explicit depth limit.  On a 1 MB
-  stack, roughly 4,000 nested XML elements (XML to JSON) or 5,000 nested JSON
-  values (JSON to XML) can be processed; deeper input can overflow the stack.
+* XML to JSON still uses RapidXML's recursive parser and a recursive traversal.
+  XML deeper than `max_xml_depth` (default 1024) is rejected with
+  `std::runtime_error`; setting `max_xml_depth = 0` disables the guard, after
+  which deep input can overflow the stack again.
+* JSON to XML parses with RapidJSON's iterative parser (`kParseIterativeFlag`)
+  and uses explicit vector-backed stacks in the writer and in `#text` array
+  flattening, so deeply nested JSON is no longer limited by the call stack.
+  Memory use still grows with nesting.
 
 ## Bundled dependencies
 
@@ -299,7 +313,8 @@ It checks the bundled documents against the expected output, plus numeric
 detection, malformed input handling, the `xml2json_document()` API, every option
 (including the configurable key names), `json2xml` and full round trips.  It also
 links a second translation unit that includes the header, which guards against
-duplicate symbols.
+duplicate symbols.  `test/test_deep.cpp` exercises 8k/16k nested JSON values
+and the XML depth guard.
 
 Run it with `make test`, or `ctest --test-dir build` after a CMake build.  Passing
 `--write` regenerates the expected `*.js.txt` files instead of checking them.

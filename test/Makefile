@@ -16,8 +16,9 @@ TARGET=test
 ALL:$(TARGET)
 
 C_SRCFILES := $(wildcard *.c)
-# test_oom.cpp has its own main() and is built by the top-level Makefile/CMake.
-CPP_SRCFILES := $(filter-out test_oom.cpp,$(wildcard *.cpp))
+# test_oom.cpp and test_deep.cpp have their own main() and are built by the
+# top-level Makefile/CMake.
+CPP_SRCFILES := $(filter-out test_oom.cpp test_deep.cpp,$(wildcard *.cpp))
 
 C_OBJS := $(patsubst %.c,%.o, $(C_SRCFILES))
 CPP_OBJS := $(patsubst %.cpp,%.o, $(CPP_SRCFILES))

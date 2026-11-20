@@ -4,6 +4,7 @@
 // Copyright (C) 2015 Alan Zhuang (Cheedoong)	HKUST.  [Updated to the latest version of rapidjson]
 // Copyright (C) 2013 Alan Zhuang (Cheedoong)	Tencent, Inc.
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -62,11 +63,18 @@ static const bool xml2json_qualify_element_names = false;
    enable this option to emit the qualified "prefix:local" name instead.
    Attribute names keep their prefix in either case.
 */
+static const std::size_t xml2json_default_max_xml_depth = 1024;
+/* XML nesting deeper than this is rejected before RapidXML's recursive parser
+   runs.  The default is deliberately conservative because the parser and the
+   XML-to-JSON traversal are still recursive.  Set it to 0 to disable the guard
+   (deeper input can overflow the call stack).
+*/
 /* [End]   This part is configurable */
 
-//! Options for the XML to JSON conversion.  The default constructor reproduces
-//! the historical behaviour (i.e. it takes its defaults from the compile-time
-//! configuration block above) so that existing code keeps working unchanged.
+//! Options for the XML to JSON conversion.  The default constructor takes its
+//! defaults from the compile-time configuration block above.  Apart from the
+//! deliberate max_xml_depth safety guard, it reproduces the historical
+//! behaviour so that existing code keeps working unchanged.
 struct xml2json_options
 {
     int  indent;                 //!< spaces per level when pretty printing; <= 0 keeps the output compact
@@ -74,6 +82,9 @@ struct xml2json_options
     bool order;                  //!< add a "#order" array where sibling order would otherwise be lost
     bool array;                  //!< always emit child elements as JSON arrays
     bool qualify_element_names;  //!< emit element names as "prefix:local" instead of just "local"
+    //! Maximum XML element nesting depth; 0 disables the guard.  XML deeper than
+    //! this is rejected before the recursive RapidXML parser runs.
+    std::size_t max_xml_depth;
 
     //! JSON member name used for an element's own text (default "#text").
     //! It must not be empty.
@@ -93,6 +104,7 @@ struct xml2json_options
         , order(xml2json_keep_element_order)
         , array(xml2json_always_array)
         , qualify_element_names(xml2json_qualify_element_names)
+        , max_xml_depth(xml2json_default_max_xml_depth)
         , text_name(xml2json_text_additional_name)
         , attribute_prefix(xml2json_attribute_name_prefix)
         , order_name(xml2json_order_additional_name)
@@ -383,6 +395,150 @@ inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Val
     }
 }
 
+// Checks XML element nesting before RapidXML parses the document.  RapidXML
+// and xml2json_traverse_node() are recursive, so this cheap iterative scan is
+// the last line of defence against a stack overflow.  Comments, CDATA sections,
+// processing instructions, DOCTYPE internal subsets and quoted attribute values
+// are skipped, and self-closing elements do not increase the depth.
+//
+// A limit of 0 disables the check.  Malformed XML is left to RapidXML, which
+// reports its own parse_error; the scan only needs to be good enough to count
+// element starts in well-formed input.
+inline void xml2json_check_depth(const char *text, std::size_t max_depth)
+{
+    if (text == nullptr || max_depth == 0)
+        return;
+
+    std::size_t depth = 0;
+    const char *p = text;
+
+    while (*p != '\0')
+    {
+        if (*p != '<')
+        {
+            ++p;
+            continue;
+        }
+
+        if (p[1] == '!')
+        {
+            if (std::strncmp(p, "<!--", 4) == 0)
+            {
+                const char *end = std::strstr(p + 2, "-->");
+                if (end == nullptr)
+                    return; // unterminated: RapidXML will reject it
+                p = end + 3;
+                continue;
+            }
+
+            if (std::strncmp(p, "<![CDATA[", 9) == 0)
+            {
+                const char *end = std::strstr(p + 2, "]]>");
+                if (end == nullptr)
+                    return; // unterminated: RapidXML will reject it
+                p = end + 3;
+                continue;
+            }
+
+            // <!DOCTYPE ...> may contain an internal subset in [...].  Ignore
+            // any '>' inside the subset or inside a quoted literal.
+            const char *q = p + 2;
+            std::size_t bracket_depth = 0;
+            char quote = '\0';
+            while (*q != '\0')
+            {
+                const char c = *q;
+                if (quote != '\0')
+                {
+                    if (c == quote)
+                        quote = '\0';
+                }
+                else if (c == '"' || c == '\'')
+                {
+                    quote = c;
+                }
+                else if (c == '[')
+                {
+                    ++bracket_depth;
+                }
+                else if (c == ']' && bracket_depth > 0)
+                {
+                    --bracket_depth;
+                }
+                else if (c == '>' && bracket_depth == 0)
+                {
+                    ++q;
+                    break;
+                }
+                ++q;
+            }
+            p = q;
+            continue;
+        }
+
+        if (p[1] == '?')
+        {
+            const char *end = std::strstr(p + 2, "?>");
+            if (end == nullptr)
+                return; // unterminated: RapidXML will reject it
+            p = end + 2;
+            continue;
+        }
+
+        if (p[1] == '/')
+        {
+            const char *end = std::strchr(p + 2, '>');
+            if (end == nullptr)
+                return; // unterminated: RapidXML will reject it
+            if (depth > 0)
+                --depth;
+            p = end + 1;
+            continue;
+        }
+
+        // Opening tag: find the closing '>' outside quoted attribute values.
+        const char *q = p + 1;
+        char quote = '\0';
+        while (*q != '\0')
+        {
+            const char c = *q;
+            if (quote != '\0')
+            {
+                if (c == quote)
+                    quote = '\0';
+            }
+            else if (c == '"' || c == '\'')
+            {
+                quote = c;
+            }
+            else if (c == '>')
+            {
+                break;
+            }
+            ++q;
+        }
+
+        if (*q == '\0')
+            return; // unterminated: RapidXML will reject it
+
+        // A tag is self-closing when the last non-space character before '>'
+        // is '/'.  Such a tag does not add a level.
+        const char *last = q;
+        while (last > p + 1 && (last[-1] == ' ' || last[-1] == '\t' || last[-1] == '\r' || last[-1] == '\n'))
+            --last;
+        const bool self_closing = last > p + 1 && last[-1] == '/';
+
+        if (self_closing == false)
+        {
+            ++depth;
+            if (depth > max_depth)
+                throw std::runtime_error("xml2json: XML nesting depth exceeds " + std::to_string(max_depth));
+        }
+
+        p = q + 1;
+    }
+}
+
 //! Parses @xml_str and returns the resulting rapidjson document, so that the
 //! JSON can be inspected directly instead of going through a string.
 inline rapidjson::Document xml2json_document(const char *xml_str, const xml2json_options &options)
@@ -392,6 +548,9 @@ inline rapidjson::Document xml2json_document(const char *xml_str, const xml2json
 
     if (xml_str == nullptr)
         return js_doc;
+
+    // Reject excessively deep XML before RapidXML's recursive parser starts.
+    xml2json_check_depth(xml_str, options.max_xml_depth);
 
     // RapidXML parses in place and therefore needs a writable, NUL-terminated
     // buffer.  Copy the caller's input, which is const and may live in
@@ -519,29 +678,67 @@ inline std::string json2xml_escape(const char *text, std::size_t size, bool attr
 
 // Text representation of a JSON scalar.  Numbers are rendered through
 // rapidjson's own writer so that they keep their exact representation.
+// Nested arrays are flattened with an explicit vector-backed stack, so a
+// deeply nested "#text" value cannot overflow the call stack.
 inline std::string json2xml_value_text(const rapidjson::Value &value)
 {
-    if (value.IsArray())
+    // The common case is a single scalar.  Avoid allocating a stack for it.
+    if (value.IsArray() == false)
     {
-        // "#text" is an array when an element has several text nodes (mixed
-        // content); concatenate them so that no text is lost.
-        std::string out;
-        for(rapidjson::Value::ConstValueIterator it = value.Begin(); it != value.End(); ++it)
-            out += json2xml_value_text(*it);
-        return out;
+        if (value.IsString())
+            return std::string(value.GetString(), value.GetStringLength());
+        if (value.IsBool())
+            return value.GetBool() ? std::string("true") : std::string("false");
+        if (value.IsNumber())
+        {
+            rapidjson::StringBuffer buffer;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+            value.Accept(writer);
+            return std::string(buffer.GetString(), buffer.GetSize());
+        }
+        return std::string(); // null and objects are not text
     }
-    if (value.IsString())
-        return std::string(value.GetString(), value.GetStringLength());
-    if (value.IsBool())
-        return value.GetBool() ? std::string("true") : std::string("false");
-    if (value.IsNumber())
+
+    // "#text" is an array when an element has several text nodes (mixed
+    // content); flatten nested arrays with an explicit LIFO stack.
+    std::string out;
+    std::vector<const rapidjson::Value *> pending;
+    pending.push_back(&value);
+
+    while (pending.empty() == false)
     {
-        rapidjson::StringBuffer buffer;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-        value.Accept(writer);
-        return std::string(buffer.GetString(), buffer.GetSize());
+        const rapidjson::Value &current = *pending.back();
+        pending.pop_back();
+
+        if (current.IsArray())
+        {
+            // Push in reverse order so that the first array item is processed
+            // first.
+            for(rapidjson::Value::ConstValueIterator it = current.End(); it != current.Begin();)
+            {
+                --it;
+                pending.push_back(&*it);
+            }
+        }
+        else if (current.IsString())
+        {
+            out.append(current.GetString(), current.GetStringLength());
+        }
+        else if (current.IsBool())
+        {
+            out += (current.GetBool() ? "true" : "false");
+        }
+        else if (current.IsNumber())
+        {
+            rapidjson::StringBuffer buffer;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+            current.Accept(writer);
+            out.append(buffer.GetString(), buffer.GetSize());
+        }
+        // null and objects are not text
     }
-    return std::string(); // null, object and array are not text
+
+    return out;
 }
 
 // True when a JSON member name denotes an XML attribute, i.e. it starts with
@@ -557,101 +754,159 @@ inline bool json2xml_member_is_attribute(const char *member, std::size_t length,
 
 inline void json2xml_write_element(const char *name, std::size_t name_len, const rapidjson::Value &value, std::string &out, const xml2json_options &options, int depth)
 {
-    if (value.IsArray())
+    // Each work item is either an element to write or the closing tag of an
+    // element whose children have already been queued.  The vector is used as a
+    // LIFO stack, so the output order stays identical to the old recursive
+    // implementation without consuming the call stack.
+    struct Task
     {
-        // an array is the same element repeated once per item
-        for(rapidjson::Value::ConstValueIterator it = value.Begin(); it != value.End(); ++it)
-            json2xml_write_element(name, name_len, *it, out, options, depth);
-        return;
-    }
+        bool close;
+        const rapidjson::Value *value;
+        const char *name;
+        std::size_t name_len;
+        int depth;
+    };
+
+    std::vector<Task> pending;
+    pending.reserve(32);
+
+    Task root = { false, &value, name, name_len, depth };
+    pending.push_back(root);
 
     const bool pretty = options.indent > 0;
-    const std::size_t pad = pretty ? static_cast<std::size_t>(options.indent) * static_cast<std::size_t>(depth) : 0;
     const std::size_t text_name_len = options.text_name.size();
     const std::size_t order_name_len = options.order_name.size();
 
-    out.append(pad, ' ');
-    out += '<';
-    out.append(name, name_len);
-
-    const rapidjson::Value *text = 0;
-    int child_count = 0;
-
-    if (value.IsObject())
+    while (pending.empty() == false)
     {
-        for(rapidjson::Value::ConstMemberIterator it = value.MemberBegin(); it != value.MemberEnd(); ++it)
+        const Task task = pending.back();
+        pending.pop_back();
+
+        if (task.close)
         {
-            const char *member = it->name.GetString();
-            const std::size_t member_len = it->name.GetStringLength();
-            if (json2xml_member_is_attribute(member, member_len, options.attribute_prefix))
-            {
-                const std::string attribute_value = json2xml_value_text(it->value);
-                const std::size_t prefix_len = options.attribute_prefix.size();
-                out += ' ';
-                out.append(member + prefix_len, member_len - prefix_len);
-                out += "=\"";
-                out += json2xml_escape(attribute_value.c_str(), attribute_value.size(), true);
-                out += '"';
-            }
-            else if (text_name_len > 0 && member_len == text_name_len && std::memcmp(member, options.text_name.c_str(), text_name_len) == 0)
-            {
-                if (it->value.IsNull() == false)
-                    text = &it->value;
-            }
-            else if (order_name_len > 0 && member_len == order_name_len && std::memcmp(member, options.order_name.c_str(), order_name_len) == 0)
-            {
-                // ordering information emitted by xml2json: not real content
-            }
-            else
-            {
-                ++child_count;
-            }
+            const std::size_t pad = pretty ? static_cast<std::size_t>(options.indent) * static_cast<std::size_t>(task.depth) : 0;
+            out.append(pad, ' ');
+            out += "</";
+            out.append(task.name, task.name_len);
+            out += '>';
+            if (pretty)
+                out += '\n';
+            continue;
         }
-    }
-    else if (value.IsNull() == false)
-    {
-        text = &value;
-    }
 
-    if (child_count == 0 && text == 0)
-    {
-        out += "/>";
-        if (pretty)
-            out += '\n';
-        return;
-    }
+        const rapidjson::Value &element = *task.value;
 
-    out += '>';
-    if (text)
-    {
-        const std::string text_value = json2xml_value_text(*text);
-        out += json2xml_escape(text_value.c_str(), text_value.size(), false);
-    }
-
-    if (child_count > 0)
-    {
-        if (pretty)
-            out += '\n';
-        for(rapidjson::Value::ConstMemberIterator it = value.MemberBegin(); it != value.MemberEnd(); ++it)
+        if (element.IsArray())
         {
-            const char *member = it->name.GetString();
-            const std::size_t member_len = it->name.GetStringLength();
-            if (json2xml_member_is_attribute(member, member_len, options.attribute_prefix))
-                continue;
-            if (text_name_len > 0 && member_len == text_name_len && std::memcmp(member, options.text_name.c_str(), text_name_len) == 0)
-                continue;
-            if (order_name_len > 0 && member_len == order_name_len && std::memcmp(member, options.order_name.c_str(), order_name_len) == 0)
-                continue;
-            json2xml_write_element(member, member_len, it->value, out, options, depth + 1);
+            // An array is the same element repeated once per item.  Push the
+            // items in reverse order so that they are emitted in original order.
+            for(rapidjson::Value::ConstValueIterator it = element.End(); it != element.Begin();)
+            {
+                --it;
+                Task item = { false, &*it, task.name, task.name_len, task.depth };
+                pending.push_back(item);
+            }
+            continue;
         }
+
+        const std::size_t pad = pretty ? static_cast<std::size_t>(options.indent) * static_cast<std::size_t>(task.depth) : 0;
+
         out.append(pad, ' ');
-    }
+        out += '<';
+        out.append(task.name, task.name_len);
 
-    out += "</";
-    out.append(name, name_len);
-    out += '>';
-    if (pretty)
-        out += '\n';
+        const rapidjson::Value *text = 0;
+        int child_count = 0;
+
+        if (element.IsObject())
+        {
+            for(rapidjson::Value::ConstMemberIterator it = element.MemberBegin(); it != element.MemberEnd(); ++it)
+            {
+                const char *member = it->name.GetString();
+                const std::size_t member_len = it->name.GetStringLength();
+                if (json2xml_member_is_attribute(member, member_len, options.attribute_prefix))
+                {
+                    const std::string attribute_value = json2xml_value_text(it->value);
+                    const std::size_t prefix_len = options.attribute_prefix.size();
+                    out += ' ';
+                    out.append(member + prefix_len, member_len - prefix_len);
+                    out += "=\"";
+                    out += json2xml_escape(attribute_value.c_str(), attribute_value.size(), true);
+                    out += '"';
+                }
+                else if (text_name_len > 0 && member_len == text_name_len && std::memcmp(member, options.text_name.c_str(), text_name_len) == 0)
+                {
+                    if (it->value.IsNull() == false)
+                        text = &it->value;
+                }
+                else if (order_name_len > 0 && member_len == order_name_len && std::memcmp(member, options.order_name.c_str(), order_name_len) == 0)
+                {
+                    // ordering information emitted by xml2json: not real content
+                }
+                else
+                {
+                    ++child_count;
+                }
+            }
+        }
+        else if (element.IsNull() == false)
+        {
+            text = &element;
+        }
+
+        if (child_count == 0 && text == 0)
+        {
+            out += "/>";
+            if (pretty)
+                out += '\n';
+            continue;
+        }
+
+        out += '>';
+        if (text)
+        {
+            const std::string text_value = json2xml_value_text(*text);
+            out += json2xml_escape(text_value.c_str(), text_value.size(), false);
+        }
+
+        if (child_count > 0)
+        {
+            if (pretty)
+                out += '\n';
+
+            // The close marker must run after every child, so push it first and
+            // then put the children on top of it.
+            Task close = { true, 0, task.name, task.name_len, task.depth };
+            pending.push_back(close);
+
+            // Walk the members backwards to preserve their original order when
+            // they are popped from the stack.
+            for(rapidjson::Value::ConstMemberIterator it = element.MemberEnd(); it != element.MemberBegin();)
+            {
+                --it;
+                const char *member = it->name.GetString();
+                const std::size_t member_len = it->name.GetStringLength();
+                if (json2xml_member_is_attribute(member, member_len, options.attribute_prefix))
+                    continue;
+                if (text_name_len > 0 && member_len == text_name_len && std::memcmp(member, options.text_name.c_str(), text_name_len) == 0)
+                    continue;
+                if (order_name_len > 0 && member_len == order_name_len && std::memcmp(member, options.order_name.c_str(), order_name_len) == 0)
+                    continue;
+
+                Task child = { false, &it->value, member, member_len, task.depth + 1 };
+                pending.push_back(child);
+            }
+        }
+        else
+        {
+            // Text without children is written inline, exactly like before.
+            out += "</";
+            out.append(task.name, task.name_len);
+            out += '>';
+            if (pretty)
+                out += '\n';
+        }
+    }
 }
 
 inline std::string json2xml(const char *json_str, const xml2json_options &options)
@@ -660,7 +915,7 @@ inline std::string json2xml(const char *json_str, const xml2json_options &option
         return std::string();
 
     rapidjson::Document js_doc;
-    js_doc.Parse(json_str);
+    js_doc.Parse<rapidjson::kParseIterativeFlag>(json_str);
     if (js_doc.HasParseError())
         throw std::runtime_error(std::string("json2xml: invalid JSON at offset ") +
                                  std::to_string(static_cast<long long>(js_doc.GetErrorOffset())) +

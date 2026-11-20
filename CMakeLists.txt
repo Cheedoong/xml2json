@@ -58,8 +58,13 @@ if(BUILD_TESTING)
     target_link_libraries(xml2json_oom_test PRIVATE xml2json::xml2json)
     target_compile_options(xml2json_oom_test PRIVATE ${XML2JSON_WARNINGS})
 
+    add_executable(xml2json_deep_test test/test_deep.cpp)
+    target_link_libraries(xml2json_deep_test PRIVATE xml2json::xml2json)
+    target_compile_options(xml2json_deep_test PRIVATE ${XML2JSON_WARNINGS})
+
     add_test(NAME xml2json.regression COMMAND xml2json_test)
     add_test(NAME xml2json.oom COMMAND xml2json_oom_test)
+    add_test(NAME xml2json.deep COMMAND xml2json_deep_test)
     # The fixtures are located relative to the current directory.
     set_tests_properties(xml2json.regression PROPERTIES
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
