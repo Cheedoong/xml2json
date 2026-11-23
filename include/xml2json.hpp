@@ -65,9 +65,9 @@ static const bool xml2json_qualify_element_names = false;
 */
 static const std::size_t xml2json_default_max_xml_depth = 1024;
 /* XML nesting deeper than this is rejected before RapidXML's recursive parser
-   runs.  The default is deliberately conservative because the parser and the
-   XML-to-JSON traversal are still recursive.  Set it to 0 to disable the guard
-   (deeper input can overflow the call stack).
+   runs.  The default is deliberately conservative because the bundled parser is
+   still recursive.  Set it to 0 to disable the guard (deeper input can overflow
+   the call stack).
 */
 /* [End]   This part is configurable */
 
@@ -228,176 +228,253 @@ inline void xml2json_add_attributes(rapidxml::xml_node<> *xmlnode, rapidjson::Va
 
 inline void xml2json_traverse_node(rapidxml::xml_node<> *xmlnode, rapidjson::Value &jsvalue, rapidjson::Document::AllocatorType& allocator, const xml2json_options &options)
 {
-    //cout << "this: " << xmlnode->type() << " name: " << xmlnode->name() << " value: " << xmlnode->value() << endl;
-    jsvalue.SetObject();
-    rapidxml::xml_node<> *xmlnode_chd;
+    // The traversal used to call itself for every child.  Keep the same
+    // post-order assembly, but make the call stack explicit: a Frame owns the
+    // result and the child-grouping state of one XML node.
+    struct Child
+    {
+        std::string name;
+        rapidjson::Value value;
+    };
 
-    // classified discussion:
-    if((xmlnode->type() == rapidxml::node_data || xmlnode->type() == rapidxml::node_cdata) && xmlnode->value())
+    struct Frame
     {
-        // case: pure_text
-        jsvalue.SetString(xmlnode->value(), allocator);  // then addmember("#text" , jsvalue, allocator)
-    }
-    else if(xmlnode->type() == rapidxml::node_element)
+        rapidxml::xml_node<> *node;
+        std::string name;
+        bool is_element;
+        rapidjson::Value value;
+        rapidxml::xml_node<> *next_child;
+        std::vector<Child> children;                          // child index -> child
+        std::unordered_map<std::string, std::size_t> slot_of; // name -> position in slots
+        std::vector<std::size_t> slots;                       // position -> child index
+        std::vector<std::string> child_order;
+        bool duplicate_names;
+        bool done;
+
+        Frame()
+            : node(0)
+            , is_element(false)
+            , next_child(0)
+            , duplicate_names(false)
+            , done(false)
+        {}
+    };
+
+    // Handles every terminal case without descending into children.  The
+    // conditions deliberately mirror the old recursive implementation.
+    const auto init_frame = [&](Frame &frame)
     {
-        if(xmlnode->first_attribute())
+        rapidxml::xml_node<> *node = frame.node;
+        frame.value.SetObject();
+
+        if((node->type() == rapidxml::node_data || node->type() == rapidxml::node_cdata) && node->value())
         {
-            if(xmlnode->first_node() && xmlnode->first_node()->type() == rapidxml::node_data && count_children(xmlnode) == 1)
+            // case: pure_text
+            frame.value.SetString(node->value(), allocator);
+            frame.done = true;
+            return;
+        }
+
+        if(node->type() != rapidxml::node_element)
+        {
+            frame.done = true;
+            return;
+        }
+
+        if(node->first_attribute())
+        {
+            if(node->first_node() && node->first_node()->type() == rapidxml::node_data && count_children(node) == 1)
             {
                 // case: <e attr="xxx">text</e>
                 rapidjson::Value jn, jv;
                 jn.SetString(options.text_name.c_str(), allocator);
-                xml2json_set_text(jv, xmlnode->first_node()->value(), allocator, options.numeric);
-                jsvalue.AddMember(jn, jv, allocator);
-                xml2json_add_attributes(xmlnode, jsvalue, allocator, options);
+                xml2json_set_text(jv, node->first_node()->value(), allocator, options.numeric);
+                frame.value.AddMember(jn, jv, allocator);
+                xml2json_add_attributes(node, frame.value, allocator, options);
+                frame.done = true;
                 return;
             }
-            else
-            {
-                // case: <e attr="xxx">...</e>
-                xml2json_add_attributes(xmlnode, jsvalue, allocator, options);
-            }
+            // case: <e attr="xxx">...</e>
+            xml2json_add_attributes(node, frame.value, allocator, options);
         }
         else
         {
-            if(!xmlnode->first_node())
+            if(!node->first_node())
             {
                 // case: <e />
-                jsvalue.SetNull();
+                frame.value.SetNull();
+                frame.done = true;
                 return;
             }
-            else if(xmlnode->first_node()->type() == rapidxml::node_data && count_children(xmlnode) == 1)
+            if(node->first_node()->type() == rapidxml::node_data && count_children(node) == 1)
             {
                 // case: <e>text</e>
-                xml2json_set_text(jsvalue, xmlnode->first_node()->value(), allocator, options.numeric);
+                xml2json_set_text(frame.value, node->first_node()->value(), allocator, options.numeric);
+                frame.done = true;
                 return;
             }
         }
-        if(xmlnode->first_node())
+
+        frame.next_child = node->first_node();
+    };
+
+    // Merges a completed child into its parent, preserving the old
+    // RemoveMember()-style ordering for repeated names.
+    const auto add_child = [&](Frame &frame, std::string name, bool is_element, rapidjson::Value &child_value)
+    {
+        std::unordered_map<std::string, std::size_t>::iterator existing = frame.slot_of.find(name);
+        if(existing == frame.slot_of.end())
         {
-            // case: complex else...
-            //
-            // Collect the children first and emit them at the end.  The old
-            // streaming implementation called FindMember() + RemoveMember() +
-            // AddMember() for every repeated child, which is quadratic when a
-            // document has many distinct names.  RapidJSON's RemoveMember()
-            // moves the *last* member into the hole and AddMember() appends, so
-            // `slots` mirrors that order in O(1) per child.
-            struct Child
+            if(options.array && is_element)
             {
-                std::string name;
-                rapidjson::Value value;
-            };
-
-            std::vector<Child> children;                          // child index -> child
-            std::unordered_map<std::string, std::size_t> slot_of; // name -> position in slots
-            std::vector<std::size_t> slots;                       // position -> child index
-            std::vector<std::string> child_order;
-            bool duplicate_names = false;
-
-            for(xmlnode_chd = xmlnode->first_node(); xmlnode_chd; xmlnode_chd = xmlnode_chd->next_sibling())
+                rapidjson::Value array_value;
+                array_value.SetArray();
+                array_value.PushBack(child_value, allocator);
+                child_value = std::move(array_value);
+            }
+            const std::size_t child_idx = frame.children.size();
+            frame.slot_of.insert(std::make_pair(name, frame.slots.size()));
+            frame.slots.push_back(child_idx);
+            Child child;
+            child.name = std::move(name);
+            child.value = std::move(child_value);
+            frame.children.push_back(std::move(child));
+        }
+        else
+        {
+            frame.duplicate_names = true;
+            const std::size_t slot = existing->second;
+            const std::size_t child_idx = frame.slots[slot];
+            Child &child = frame.children[child_idx];
+            if(child.value.IsArray())
             {
-                std::string current_name;
-                bool is_element = false;
-
-                if(xmlnode_chd->type() == rapidxml::node_data || xmlnode_chd->type() == rapidxml::node_cdata)
-                {
-                    current_name = options.text_name;
-                }
-                else if(xmlnode_chd->type() == rapidxml::node_element)
-                {
-                    current_name = xml2json_element_name(xmlnode_chd, options);
-                    is_element = true;
-                }
-                else
-                {
-                    continue; // ignore anything else (comments, PIs, ...); defensive, not produced by parse<0>
-                }
-
-                if(options.order)
-                    child_order.push_back(current_name);
-
-                rapidjson::Value child_value;
-                xml2json_traverse_node(xmlnode_chd, child_value, allocator, options);
-
-                std::unordered_map<std::string, std::size_t>::iterator existing = slot_of.find(current_name);
-                if(existing == slot_of.end())
-                {
-                    if(options.array && is_element)
-                    {
-                        rapidjson::Value array_value;
-                        array_value.SetArray();
-                        array_value.PushBack(child_value, allocator);
-                        child_value = array_value;
-                    }
-                    const std::size_t child_idx = children.size();
-                    slot_of.insert(std::make_pair(current_name, slots.size()));
-                    slots.push_back(child_idx);
-                    Child child;
-                    child.name = std::move(current_name);
-                    child.value = std::move(child_value);
-                    children.push_back(std::move(child));
-                }
-                else
-                {
-                    duplicate_names = true;
-                    const std::size_t slot = existing->second;
-                    const std::size_t child_idx = slots[slot];
-                    Child &child = children[child_idx];
-                    if(child.value.IsArray())
-                    {
-                        child.value.PushBack(child_value, allocator);
-                    }
-                    else
-                    {
-                        rapidjson::Value array_value;
-                        array_value.SetArray();
-                        array_value.PushBack(child.value, allocator);
-                        array_value.PushBack(child_value, allocator);
-                        child.value = array_value;
-                    }
-
-                    // Mirror RemoveMember(): the last slot moves into the hole.
-                    const std::size_t last = slots.size() - 1;
-                    if(slot != last)
-                    {
-                        const std::size_t moved_child = slots[last];
-                        slots[slot] = moved_child;
-                        slot_of[children[moved_child].name] = slot;
-                        slots[last] = child_idx;
-                        slot_of[current_name] = last;
-                    }
-                }
+                child.value.PushBack(child_value, allocator);
+            }
+            else
+            {
+                rapidjson::Value array_value;
+                array_value.SetArray();
+                array_value.PushBack(child.value, allocator);
+                array_value.PushBack(child_value, allocator);
+                child.value = std::move(array_value);
             }
 
-            for(std::vector<std::size_t>::const_iterator it = slots.begin(); it != slots.end(); ++it)
+            // Mirror RemoveMember(): the last slot moves into the hole.
+            const std::size_t last = frame.slots.size() - 1;
+            if(slot != last)
             {
-                Child &child = children[*it];
-                rapidjson::Value jn;
-                jn.SetString(child.name.c_str(), static_cast<rapidjson::SizeType>(child.name.size()), allocator);
-                jsvalue.AddMember(jn, child.value, allocator);
-            }
-
-            if(options.order && duplicate_names && options.order_name.empty() == false)
-            {
-                rapidjson::Value jn, jorder;
-                jn.SetString(options.order_name.c_str(), allocator);
-                jorder.SetArray();
-                for(std::vector<std::string>::const_iterator it = child_order.begin(); it != child_order.end(); ++it)
-                {
-                    rapidjson::Value jitem;
-                    jitem.SetString(it->c_str(), allocator);
-                    jorder.PushBack(jitem, allocator);
-                }
-                jsvalue.AddMember(jn, jorder, allocator);
+                const std::size_t moved_child = frame.slots[last];
+                frame.slots[slot] = moved_child;
+                frame.slot_of[frame.children[moved_child].name] = slot;
+                frame.slots[last] = child_idx;
+                frame.slot_of[name] = last;
             }
         }
+    };
+
+    // Emits the grouped children and the optional #order array.
+    const auto finish_frame = [&](Frame &frame)
+    {
+        for(std::vector<std::size_t>::const_iterator it = frame.slots.begin(); it != frame.slots.end(); ++it)
+        {
+            Child &child = frame.children[*it];
+            rapidjson::Value jn;
+            jn.SetString(child.name.c_str(), static_cast<rapidjson::SizeType>(child.name.size()), allocator);
+            frame.value.AddMember(jn, child.value, allocator);
+        }
+
+        if(options.order && frame.duplicate_names && options.order_name.empty() == false)
+        {
+            rapidjson::Value jn, jorder;
+            jn.SetString(options.order_name.c_str(), allocator);
+            jorder.SetArray();
+            for(std::vector<std::string>::const_iterator it = frame.child_order.begin(); it != frame.child_order.end(); ++it)
+            {
+                rapidjson::Value jitem;
+                jitem.SetString(it->c_str(), allocator);
+                jorder.PushBack(jitem, allocator);
+            }
+            frame.value.AddMember(jn, jorder, allocator);
+        }
+
+        frame.done = true;
+    };
+
+    std::vector<Frame> stack;
+    stack.reserve(64);
+
+    Frame root;
+    root.node = xmlnode;
+    root.is_element = (xmlnode->type() == rapidxml::node_element);
+    init_frame(root);
+    stack.push_back(std::move(root));
+
+    while(stack.empty() == false)
+    {
+        Frame &frame = stack.back();
+
+        if(frame.done)
+        {
+            if(stack.size() == 1)
+            {
+                jsvalue = std::move(frame.value);
+                stack.pop_back();
+                break;
+            }
+
+            Frame &parent = stack[stack.size() - 2];
+            parent.next_child = frame.node->next_sibling();
+
+            std::string name = std::move(frame.name);
+            const bool is_element = frame.is_element;
+            rapidjson::Value child_value = std::move(frame.value);
+            stack.pop_back();
+            add_child(parent, std::move(name), is_element, child_value);
+            continue;
+        }
+
+        if(frame.next_child == 0)
+        {
+            finish_frame(frame);
+            continue;
+        }
+
+        rapidxml::xml_node<> *child = frame.next_child;
+        std::string current_name;
+        bool is_element = false;
+
+        if(child->type() == rapidxml::node_data || child->type() == rapidxml::node_cdata)
+        {
+            current_name = options.text_name;
+        }
+        else if(child->type() == rapidxml::node_element)
+        {
+            current_name = xml2json_element_name(child, options);
+            is_element = true;
+        }
+        else
+        {
+            // Ignore anything else (comments, PIs, ...); defensive, not
+            // produced by parse<0>.
+            frame.next_child = child->next_sibling();
+            continue;
+        }
+
+        if(options.order)
+            frame.child_order.push_back(current_name);
+
+        Frame child_frame;
+        child_frame.node = child;
+        child_frame.name = std::move(current_name);
+        child_frame.is_element = is_element;
+        init_frame(child_frame);
+        stack.push_back(std::move(child_frame));
     }
 }
 
-// Checks XML element nesting before RapidXML parses the document.  RapidXML
-// and xml2json_traverse_node() are recursive, so this cheap iterative scan is
-// the last line of defence against a stack overflow.  Comments, CDATA sections,
+// Checks XML element nesting before RapidXML parses the document.  RapidXML is
+// still recursive, so this cheap iterative scan is the last line of defence
+// against a parser stack overflow.  Comments, CDATA sections,
 // processing instructions, DOCTYPE internal subsets and quoted attribute values
 // are skipped, and self-closing elements do not increase the depth.
 //

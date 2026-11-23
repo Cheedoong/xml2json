@@ -1,5 +1,7 @@
 // Regression tests for deep nesting:
 //
+//   * xml2json_traverse_node() uses an explicit frame stack, so a manually
+//     built 8k-deep XML tree must not overflow the call stack.
 //   * json2xml() parses and writes with explicit stacks, so deeply nested
 //     JSON must not overflow the call stack.
 //   * xml2json() still uses RapidXML's recursive parser, so it rejects XML
@@ -10,6 +12,7 @@
 #include <cstddef>
 #include <exception>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -110,7 +113,41 @@ static bool throws_with_message(const std::string &xml, const xml2json_options &
 
 int main()
 {
-    std::cout << "=== json2xml: deep nesting ===\n";
+    std::cout << "=== XML traversal: deep nesting ===\n";
+    {
+        // Bypass RapidXML's parser so this checks xml2json_traverse_node()
+        // itself: the old recursive traversal would overflow the call stack.
+        const std::size_t depth = 8192;
+        std::unique_ptr<rapidxml::xml_document<> > doc(new rapidxml::xml_document<>());
+        rapidxml::xml_node<> *root = doc->allocate_node(rapidxml::node_element, "a");
+        doc->append_node(root);
+
+        rapidxml::xml_node<> *current = root;
+        for(std::size_t i = 1; i < depth; ++i)
+        {
+            rapidxml::xml_node<> *child = doc->allocate_node(rapidxml::node_element, "a");
+            current->append_node(child);
+            current = child;
+        }
+
+        rapidjson::Document out;
+        out.SetObject();
+        xml2json_options options;
+        xml2json_traverse_node(root, out, out.GetAllocator(), options);
+
+        std::size_t actual_depth = 0;
+        const rapidjson::Value *value = &out;
+        while(value->IsObject() && value->HasMember("a"))
+        {
+            value = &(*value)["a"];
+            ++actual_depth;
+        }
+
+        check(actual_depth == depth - 1 && value->IsNull(),
+              "8k nested XML nodes traverse without overflowing the call stack");
+    }
+
+    std::cout << "\n=== json2xml: deep nesting ===\n";
     {
         const std::size_t depth = 8192;
         const std::string json = make_nested_json_object(depth);
