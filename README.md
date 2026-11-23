@@ -284,10 +284,11 @@ structures.  Arbitrary JSON is not guaranteed to round-trip:
   values.
 * Duplicate JSON object keys are not detected; each occurrence is written as a
   separate element (or attribute).
-* XML to JSON still uses RapidXML's recursive parser and a recursive traversal.
+* XML to JSON uses an iterative traversal (`xml2json_traverse_node()` with an
+  explicit frame stack), but the bundled RapidXML parser is still recursive.
   XML deeper than `max_xml_depth` (default 1024) is rejected with
   `std::runtime_error`; setting `max_xml_depth = 0` disables the guard, after
-  which deep input can overflow the stack again.
+  which deep input can overflow the parser stack again.
 * JSON to XML parses with RapidJSON's iterative parser (`kParseIterativeFlag`)
   and uses explicit vector-backed stacks in the writer and in `#text` array
   flattening, so deeply nested JSON is no longer limited by the call stack.
@@ -313,8 +314,8 @@ It checks the bundled documents against the expected output, plus numeric
 detection, malformed input handling, the `xml2json_document()` API, every option
 (including the configurable key names), `json2xml` and full round trips.  It also
 links a second translation unit that includes the header, which guards against
-duplicate symbols.  `test/test_deep.cpp` exercises 8k/16k nested JSON values
-and the XML depth guard.
+duplicate symbols.  `test/test_deep.cpp` exercises 8k nested XML traversal,
+8k/16k nested JSON values and the XML depth guard.
 
 Run it with `make test`, or `ctest --test-dir build` after a CMake build.  Passing
 `--write` regenerates the expected `*.js.txt` files instead of checking them.
